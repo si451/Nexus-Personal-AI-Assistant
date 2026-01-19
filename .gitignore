@@ -1,0 +1,61 @@
+# Nexus AI - Git Ignore
+
+# ==================== MEMORY & DATA ====================
+memory/visual_cortex/
+memory/*.faiss
+memory/*.duckdb
+*.duckdb
+*.duckdb.wal
+
+# ==================== CHECKPOINTS ====================
+checkpoints/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# ==================== LOGS ====================
+*.log
+debug_log.txt
+vision_debug.log
+logs/
+
+# ==================== PYTHON ====================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# ==================== IDE ====================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ==================== OS ====================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ==================== SECRETS ====================
+.env
+*.env
+secrets/
+
+# ==================== TEMP ====================
+*.tmp
+*.temp
+temp/
+tmp/
+
+# ==================== MODELS (Large files) ====================
+*.pt
+*.pth
+*.onnx
+*.bin
+models/

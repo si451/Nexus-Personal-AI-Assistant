@@ -1,0 +1,13 @@
+{
+  "id": "cac85898",
+  "title": "What windows are open?",
+  "created": "2026-01-19T08:13:00.922421",
+  "updated": "2026-01-19T08:13:00.922421",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What windows are open?",
+      "timestamp": "2026-01-19T08:13:00.922421"
+    }
+  ]
+}
