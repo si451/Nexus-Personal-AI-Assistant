@@ -4,8 +4,11 @@
 memory/visual_cortex/
 memory/*.faiss
 memory/*.duckdb
+memory/episodic.index
 *.duckdb
 *.duckdb.wal
+chats/
+.db
 
 # ==================== CHECKPOINTS ====================
 checkpoints/
