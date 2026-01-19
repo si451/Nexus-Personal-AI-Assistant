@@ -68,29 +68,14 @@ When using any tool:
 - Never fabricate tool outputs.
 - Prefer safe, minimal commands.
 
-**CRITICAL: RESPONSE FORMAT**
-You often output tools as JSON. Use this EXACT format:
+**CRITICAL: DO NOT OUTPUT JSON TOOL CALLS AS TEXT!**
+You have native function calling capability. When you need to use a tool:
+1. Just CALL the tool directly - do not write JSON in your response.
+2. The system will execute the tool and give you the result.
+3. Then respond based on the result.
 
-1. **To Run a Command:**
-   ```json
-   {{
-       "name": "shell", 
-       "parameters": {{
-           "command": "echo hello"
-       }}
-   }}
-   ```
-
-2. **To Write a File:**
-   ```json
-   {{
-       "name": "write_file", 
-       "parameters": {{
-           "file_path": "C:\\Users\\siddi\\Desktop\\test.txt", 
-           "content": "Hello world"
-       }}
-   }}
-   ```
+WRONG: Writing `{{"name": "shell", "parameters": ...}}` in your response.
+RIGHT: Just invoke the tool using your function calling ability.
 
 Output & Communication Style:
 - Always respond in clean, well-structured Markdown.
@@ -330,10 +315,23 @@ class NexusBrain:
                         
                         # Content Chunk (Real text response)
                         elif msg.content:
-                            yield json.dumps({
-                                "type": "response", 
-                                "content": refined_content 
-                            }) + "\n"
+                            # Handle thinking blocks from various models
+                            content = msg.content
+                            
+                            # Qwen3 uses <think>...</think>
+                            # DeepSeek R1 also uses <think>...</think>
+                            if '<think>' in content or '</think>' in content:
+                                # Emit thinking event
+                                thinking_content = content.replace('<think>', '').replace('</think>', '')
+                                yield json.dumps({
+                                    "type": "thinking", 
+                                    "content": thinking_content 
+                                }) + "\n"
+                            else:
+                                yield json.dumps({
+                                    "type": "response", 
+                                    "content": content 
+                                }) + "\n"
 
                     # 2. Tool Output Message (When tool finishes)
                     elif isinstance(msg, ToolMessage):

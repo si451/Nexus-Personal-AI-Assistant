@@ -75,13 +75,6 @@
                                 <path d="M12 5v14M5 12h14" />
                             </svg>
                         </span>
-                        <span class="control-btn model-badge">
-                            qwen3-vl:235b-cloud
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <polyline points="6 9 12 15 18 9" />
-                            </svg>
-                        </span>
                     </div>
 
                     <button id="sendBtn" class="send-btn" onclick="sendMessage()">
@@ -250,10 +243,17 @@
             setStopButton();
             abortController = new AbortController();
 
+            // Add typing indicator
+            const typingIndicator = document.createElement('div');
+            typingIndicator.className = 'typing-indicator';
+            typingIndicator.innerHTML = '<span></span><span></span><span></span>';
+            aiContent.appendChild(typingIndicator);
+
             // Render State
             let currentTextDiv = document.createElement('div');
             aiContent.appendChild(currentTextDiv);
             let currentMarkdownBuffer = '';
+            let firstContentReceived = false;
 
             let currentThoughtDetails = null;
 
@@ -283,6 +283,9 @@
                             const event = JSON.parse(line);
 
                             if (event.type === 'tool_start') {
+                                // Remove typing indicator on first content
+                                if (typingIndicator.parentNode) typingIndicator.remove();
+
                                 // 1. Finish previous text block (if any)
                                 // (Already done by nature of appending)
 
@@ -320,7 +323,31 @@
                                     currentThoughtDetails.appendChild(outDiv);
                                 }
                             }
+                            else if (event.type === 'thinking') {
+                                // Remove typing indicator
+                                if (typingIndicator.parentNode) typingIndicator.remove();
+
+                                // Show thinking in a collapsible block
+                                if (!currentThoughtDetails) {
+                                    const details = document.createElement('details');
+                                    details.className = 'thought-block';
+                                    details.open = false;
+                                    details.innerHTML = `
+                                        <summary class="thought-summary">
+                                            <svg class="thought-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                                            Thinking...
+                                        </summary>
+                                        <div class="thought-details"></div>
+                                     `;
+                                    aiContent.appendChild(details);
+                                    currentThoughtDetails = details.querySelector('.thought-details');
+                                }
+                                currentThoughtDetails.innerHTML += event.content;
+                            }
                             else if (event.type === 'response') {
+                                // Remove typing indicator
+                                if (typingIndicator.parentNode) typingIndicator.remove();
+
                                 currentMarkdownBuffer += event.content;
                                 currentTextDiv.innerHTML = marked.parse(currentMarkdownBuffer);
                                 currentTextDiv.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
