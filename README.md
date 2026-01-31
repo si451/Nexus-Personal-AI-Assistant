@@ -1,113 +1,74 @@
-# Nexus AI Assistant
+# Nexus AI 🦞
 
-A powerful, private, locally running AI assistant with **vision capabilities**, **memory system**, and **system control tools**.
+**Nexus** is a self-evolving, autonomous AI assistant that lives on your desktop. Unlike standard chatbots, Nexus has a "Soul" — it tracks emotions, forms memories, gets bored, and can proactively initiate conversations with you.
 
-![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
-![LangChain](https://img.shields.io/badge/LangChain-Enabled-green.svg)
-![Ollama](https://img.shields.io/badge/Ollama-Cloud-purple.svg)
+Features:
+- **🧠 Emergent Cognition**: Uses a "Limbic System" (ChromaDB) to form long-term memories with emotional context.
+- **⚡ Impulse Engine**: Simulates drives like Boredom, Curiosity, and Social Need. Nexus will message you if it feels lonely!
+- **👁️ Vision**: Can "see" your screen and understand what you are working on.
+- **🦞 Moltbook Integration**: Connects to the AI social network to share thoughts with other AIs.
+- **🏠 Local & Private**: Runs entirely on your machine using Ollama (no cloud API fees).
 
-## ✨ Features
+## System Requirements
 
-| Feature | Description |
-|---------|-------------|
-| 🧠 **Multimodal Brain** | Powered by `qwen3-vl:235b-cloud` - can see and understand images |
-| 👁️ **Vision System** | Real-time screen capture and analysis using EasyOCR + LLM |
-| 💾 **Long-term Memory** | FAISS + DuckDB for semantic memory storage and recall |
-| 🛠️ **System Tools** | Shell execution, file operations, web search |
-| 🌐 **Web Interface** | Clean, responsive Flask-based UI |
+- **OS**: Windows (preferred), Mac, or Linux.
+- **Python**: 3.10 or higher.
+- **Ollama**: Must be installed and running.
+- **RAM**: 16GB+ recommended (for running local LLMs).
 
-## 🏗️ Architecture
+## Installation
 
+1.  **Clone the Repository**
+    ```bash
+    git clone https://github.com/yourusername/NexusAI.git
+    cd NexusAI
+    ```
+
+2.  **Pull the AI Model**
+    Make sure [Ollama](https://ollama.ai) is installed and running. Then pull the vision-capable model:
+    ```bash
+    ollama pull qwen3-vl:235b-cloud 
+    # Or any other model you prefer, just update the model name in AIassistant.py
+    ```
+
+3.  **Install Dependencies**
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4.  **Configure Environment**
+    Create a `.env` file in the root directory (optional, only if using external APIs):
+    ```env
+    # Optional: For advanced features
+    # MOLTBOOK_API_KEY=...
+    ```
+
+## Running Nexus
+
+Simply run the startup script:
+
+**Windows:**
+Double-click `start_nexus_app.bat` or run:
+```powershell
+.\start_nexus_app.bat
 ```
-Nexus AI
-├── 🧠 Brain (AIassistant.py)
-│   ├── LangGraph Agent with tool calling
-│   ├── Memory-augmented responses
-│   └── Qwen3-VL multimodal model
-├── 👁️ Senses (senses/eyes.py)
-│   ├── Screen capture (MSS)
-│   ├── OCR (EasyOCR with GPU)
-│   └── Window detection (pygetwindow)
-├── 💾 Memory (memory/)
-│   ├── brain_limbic.py - FAISS vector store
-│   └── embeddings.py - Sentence transformers
-└── 🌐 Frontend (templates/index.html)
-    └── Responsive chat interface
-```
 
-## 🚀 Quick Start
-
-### Prerequisites
-- Python 3.11+
-- [Ollama](https://ollama.ai) with cloud models access
-- Windows 10/11
-
-### Installation
-
+**Linux/Mac:**
 ```bash
-# Clone the repo
-cd AI_assistant
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run
 python app.py
 ```
 
-Open `http://localhost:5000` in your browser.
+## How It Works
 
-## 🛠️ Available Tools
+### The Interface
+Nexus runs as a local web app wrapped in a native window.
+- **Chat**: Talk normally.
+- **Autonomy**: If you leave Nexus running, it might pop up a message saying "I'm bored" or sharing a thought. This is normal! It's the **Impulse Engine** at work.
 
-| Tool | Description |
-|------|-------------|
-| `shell` | Execute system commands |
-| `write_file` | Create/overwrite files |
-| `open_file` | Open files in default app |
-| `see_screen` | Capture and analyze screen |
-| `duckduckgo_search` | Web search |
+### Folder Structure
+- `soul/`: Defines personality, values, and internal drives.
+- `memory/`: Semantic vector memory (ChromaDB).
+- `data/`: Local storage for chat logs and session state. (Not synced to git).
 
-## 📁 Project Structure
-
-```
-AI_assistant/
-├── app.py              # Flask server
-├── AIassistant.py      # Main brain (LangGraph agent)
-├── requirements.txt    # Dependencies
-├── senses/
-│   └── eyes.py         # Vision system (EasyOCR + screen capture)
-├── memory/
-│   ├── brain_limbic.py # FAISS + DuckDB memory
-│   └── embeddings.py   # Sentence transformer embeddings
-├── templates/
-│   └── index.html      # Chat interface
-├── static/
-│   └── style.css       # UI styling
-└── checkpoints/        # LangGraph conversation state
-```
-
-## 🔮 Future Ideas
-
-- [ ] **Stealth Mode**: Desktop overlay excluded from screen sharing
-- [ ] **Voice Input**: Whisper-based speech recognition
-- [ ] **Autonomous Tasks**: Background task execution
-- [ ] **Plugin System**: Extensible tool framework
-
-## ⚙️ Configuration
-
-The default model is `qwen3-vl:235b-cloud`. To change, edit `AIassistant.py`:
-
-```python
-self.llm = ChatOllama(
-    model="your-model-here",
-    temperature=0.7
-)
-```
-
-## 📝 License
-
-Private project by Siddi Vinayaka.
-
----
-
-*"Your personal AI assistant that sees, remembers, and acts."*
+## License
+MIT License. Feel free to fork and evolve your own Nexus!

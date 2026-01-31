@@ -1,18 +1,21 @@
-langgraph
-langgraph-sdk
-customtkinter
-packaging
+# Core AI
 langchain
 langchain-community
-langchain-groq
+langchain-core
+langchain-ollama
+langgraph
+chromadb
+
+# Web/UI
+flask
+pywebview
+
+# Tools & Utilities
+duckduckgo-search
+mss
+Pillow
+requests
 python-dotenv
-langgraph-checkpoint-sqlite
-tkwebview2
-markdown
-faiss-cpu
-duckdb
-sentence-transformers
-numpy
-pyautogui
-easyocr
-pygetwindow
+
+# Optional but good to have
+colorama

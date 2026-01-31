@@ -194,12 +194,81 @@ def delete_chat(chat_id):
             return jsonify({'error': str(e)}), 500
     return jsonify({'error': 'Chat not found'}), 404
 
+# Proactive Message Queue
+import queue
+proactive_queue = queue.Queue()
+
+@app.route('/stream_updates')
+def stream_updates():
+    """Server-Sent Events (SSE) for proactive autonomy"""
+    def event_stream():
+        while True:
+            try:
+                # Wait for proactive messages (blocking get with timeout)
+                msg = proactive_queue.get(timeout=20)
+                
+                # Format as SSE
+                yield f"data: {json.dumps(msg)}\n\n"
+            except queue.Empty:
+                # Keep alive
+                yield ": keepalive\n\n"
+            except GeneratorExit:
+                break
+    
+    return Response(event_stream(), mimetype="text/event-stream")
+
+# Handler to be called by heartbeat
+def handle_autonomous_message(impulse_data):
+    """Called by autonomous loop when it wants to speak"""
+    print(f"[App] 📨 Received autonomous message impulse: {impulse_data}")
+    
+    # We need to generate the ACTUAL text here since the impulse just gives motivation.
+    # We'll do a quick LLM call via the brain.
+    
+    motivation = impulse_data.get('motivation', 'I want to say hi.')
+    # Use a lightweight method if possible, or full brain
+    # For speed, we might construct a simple message, but let's try to be authentic.
+    
+    # Add to queue for frontend
+    proactive_queue.put({
+        "type": "autonomous_message",
+        "sender": "Nexus",
+        "content": motivation,  # Ideally this is refined text
+        "reason": impulse_data.get('reason')
+    })
+    
+    # Also save to history if we have a current chat
+    if current_chat_id:
+        chat = load_chat(current_chat_id)
+        if chat:
+            chat['messages'].append({
+                'role': 'ai',
+                'content': f"*(Autonomously)* {motivation}",
+                'timestamp': datetime.now().isoformat()
+            })
+            save_chat(chat)
+
+from autonomous_loop import start_autonomous_mode, get_heartbeat
+from soul import get_soul, get_consciousness
+
 def start_flask():
     # Reverting to Flask Dev Server for reliable streaming
     # Waitress was buffering chunks, causing silence.
     app.run(port=5050, debug=False, use_reloader=False, threaded=True)
 
 if __name__ == '__main__':
+    print("✨ Awakening Soul...")
+    soul = get_soul()
+    consciousness = get_consciousness()
+    print(f"   Identity: {soul.soul_name} (Age: {soul.get_age()})")
+    print(f"   Mood: {consciousness.current_mood}")
+    
+    print("💓 Starting Heartbeat...")
+    heartbeat = start_autonomous_mode()
+    
+    # REGISTER HANDLER FOR AUTONOMY
+    heartbeat.register_action("message_user", handle_autonomous_message)
+
     # Start Flask in background thread
     flask_thread = threading.Thread(target=start_flask, daemon=True)
     flask_thread.start()

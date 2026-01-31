@@ -1,64 +1,53 @@
-# Nexus AI - Git Ignore
-
-# ==================== MEMORY & DATA ====================
-memory/visual_cortex/
-memory/*.faiss
-memory/*.duckdb
-memory/episodic.index
-*.duckdb
-*.duckdb.wal
-chats/
-.db
-
-# ==================== CHECKPOINTS ====================
-checkpoints/
-*.sqlite
-*.sqlite-wal
-*.sqlite-shm
-
-# ==================== LOGS ====================
-*.log
-debug_log.txt
-vision_debug.log
-logs/
-
-# ==================== PYTHON ====================
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
+.env
+.venv
 env/
 venv/
-.venv/
 ENV/
 
-# ==================== IDE ====================
-.idea/
+# Distribution / Packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Nexus Specific
+# We want to ignore the user's personal data/memories
+# But keep the structure
+data/
+chats/
+!data/.gitkeep
+!chats/.gitkeep
+
+# Logs
+*.log
+debug_log.txt
+vision_debug.log
+
+# Database (if any local sqlite left)
+*.db
+*.sqlite
+*.duckdb
+*.duckdb.wal
+memory/
+
+# VS Code
 .vscode/
-*.swp
-*.swo
-*~
 
-# ==================== OS ====================
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# ==================== SECRETS ====================
-.env
-*.env
-secrets/
-
-# ==================== TEMP ====================
-*.tmp
-*.temp
-temp/
-tmp/
-
-# ==================== MODELS (Large files) ====================
-*.pt
-*.pth
-*.onnx
-*.bin
-models/
+# Moltbook Credentials (don't push your keys!)
+moltbook_credentials.json

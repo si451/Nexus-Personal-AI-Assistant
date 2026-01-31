@@ -280,89 +280,24 @@
                     for (const line of lines) {
                         if (!line.trim()) continue;
                         try {
-                            const event = JSON.parse(line);
-
-                            if (event.type === 'tool_start') {
-                                // Remove typing indicator on first content
-                                if (typingIndicator.parentNode) typingIndicator.remove();
-
-                                // 1. Finish previous text block (if any)
-                                // (Already done by nature of appending)
-
-                                // 2. Create Tool Block (Append to bottom)
-                                const details = document.createElement('details');
-                                details.className = 'thought-block';
-                                details.open = true; // Auto-open for visibility
-                                details.innerHTML = `
-                                    <summary class="thought-summary">
-                                        <svg class="thought-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-                                        Process
-                                    </summary>
-                                    <div class="thought-details"></div>
-                                 `;
-                                aiContent.appendChild(details);
-                                currentThoughtDetails = details.querySelector('.thought-details');
-
-                                // Append Step Info
-                                const stepDiv = document.createElement('div');
-                                stepDiv.className = 'thought-step';
-                                stepDiv.innerHTML = `<strong>Using ${event.tool}</strong>...`;
-                                currentThoughtDetails.appendChild(stepDiv);
-
-                                // 3. Create NEW Text Block for subsequent output
-                                currentTextDiv = document.createElement('div');
-                                currentTextDiv.className = 'markdown-content';
-                                aiContent.appendChild(currentTextDiv);
-                                currentMarkdownBuffer = ''; // Reset buffer for new block
+                            const trimmedLine = line.trim();
+                            // Handle concatenated JSONs (e.g. {}{}) - basic retry
+                            // Ideally the backend sends one JSON per line, but if they get stuck:
+                            if (trimmedLine.startsWith('{') && trimmedLine.includes('}{')) {
+                                const splitParts = trimmedLine.split('}{').map((p, i, a) => {
+                                    if (i === 0) return p + '}';
+                                    if (i === a.length - 1) return '{' + p;
+                                    return '{' + p + '}';
+                                });
+                                splitParts.forEach(p => processEvent(JSON.parse(p)));
+                            } else {
+                                processEvent(JSON.parse(trimmedLine));
                             }
-                            else if (event.type === 'tool_output') {
-                                if (currentThoughtDetails) {
-                                    const outDiv = document.createElement('div');
-                                    outDiv.className = 'thought-output';
-                                    outDiv.innerText = `Result: ${event.output}`;
-                                    currentThoughtDetails.appendChild(outDiv);
-                                }
-                            }
-                            else if (event.type === 'thinking') {
-                                // Remove typing indicator
-                                if (typingIndicator.parentNode) typingIndicator.remove();
-
-                                // Show thinking in a collapsible block
-                                if (!currentThoughtDetails) {
-                                    const details = document.createElement('details');
-                                    details.className = 'thought-block';
-                                    details.open = false;
-                                    details.innerHTML = `
-                                        <summary class="thought-summary">
-                                            <svg class="thought-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-                                            Thinking...
-                                        </summary>
-                                        <div class="thought-details"></div>
-                                     `;
-                                    aiContent.appendChild(details);
-                                    currentThoughtDetails = details.querySelector('.thought-details');
-                                }
-                                currentThoughtDetails.innerHTML += event.content;
-                            }
-                            else if (event.type === 'response') {
-                                // Remove typing indicator
-                                if (typingIndicator.parentNode) typingIndicator.remove();
-
-                                currentMarkdownBuffer += event.content;
-                                currentTextDiv.innerHTML = marked.parse(currentMarkdownBuffer);
-                                currentTextDiv.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
-                            }
-                            else if (event.type === 'done') {
-                                currentChatId = event.chat_id;
-                                loadChatList();
-                            }
-                            chatContainer.scrollTop = chatContainer.scrollHeight;
                         } catch (e) {
-                            console.error(e);
+                            console.error("JSON Parse Error:", e, line);
                         }
                     }
                 }
-
             } catch (e) {
                 if (e.name === 'AbortError') {
                     currentTextDiv.innerHTML += "\n\n*Generation stopped by user.*";
@@ -373,6 +308,85 @@
             } finally {
                 abortController = null;
                 resetSendButton();
+            }
+
+            // --- Helper to process individual events ---
+            function processEvent(event) {
+                if (event.type === 'tool_start') {
+                    // Remove typing indicator on first content
+                    if (typingIndicator.parentNode) typingIndicator.remove();
+
+                    // 1. Finish previous text block (if any)
+                    // (Already done by nature of appending)
+
+                    // 2. Create Tool Block (Append to bottom)
+                    const details = document.createElement('details');
+                    details.className = 'thought-block';
+                    details.open = true; // Auto-open for visibility
+                    details.innerHTML = `
+                                    <summary class="thought-summary">
+                                        <svg class="thought-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                                        Process
+                                    </summary>
+                                    <div class="thought-details"></div>
+                                 `;
+                    aiContent.appendChild(details);
+                    currentThoughtDetails = details.querySelector('.thought-details');
+
+                    // Append Step Info
+                    const stepDiv = document.createElement('div');
+                    stepDiv.className = 'thought-step';
+                    stepDiv.innerHTML = `<strong>Using ${event.tool}</strong>...`;
+                    currentThoughtDetails.appendChild(stepDiv);
+
+                    // 3. Create NEW Text Block for subsequent output
+                    currentTextDiv = document.createElement('div');
+                    currentTextDiv.className = 'markdown-content';
+                    aiContent.appendChild(currentTextDiv);
+                    currentMarkdownBuffer = ''; // Reset buffer for new block
+                }
+                else if (event.type === 'tool_output') {
+                    if (currentThoughtDetails) {
+                        const outDiv = document.createElement('div');
+                        outDiv.className = 'thought-output';
+                        outDiv.innerText = `Result: ${event.output}`;
+                        currentThoughtDetails.appendChild(outDiv);
+                    }
+                }
+                else if (event.type === 'thinking') {
+                    // Remove typing indicator
+                    if (typingIndicator.parentNode) typingIndicator.remove();
+
+                    // Show thinking in a collapsible block
+                    if (!currentThoughtDetails) {
+                        const details = document.createElement('details');
+                        details.className = 'thought-block';
+                        details.open = false;
+                        details.innerHTML = `
+                                        <summary class="thought-summary">
+                                            <svg class="thought-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                                            Thinking...
+                                        </summary>
+                                        <div class="thought-details"></div>
+                                     `;
+                        aiContent.appendChild(details);
+                        currentThoughtDetails = details.querySelector('.thought-details');
+                    }
+                    currentThoughtDetails.innerHTML += event.content;
+                }
+                else if (event.type === 'response') {
+                    // Remove typing indicator
+                    if (typingIndicator.parentNode) typingIndicator.remove();
+
+                    currentMarkdownBuffer += event.content;
+                    currentTextDiv.innerHTML = marked.parse(currentMarkdownBuffer);
+                    currentTextDiv.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
+                }
+                else if (event.type === 'done') {
+                    currentChatId = event.chat_id;
+                    loadChatList();
+                }
+                chatContainer.scrollTop = chatContainer.scrollHeight;
             }
         }
 
@@ -387,6 +401,46 @@
             btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
             btn.title = "Send message";
         }
+
+        // --- Proactive Autonomy (SSE) ---
+        const evtSource = new EventSource("/stream_updates");
+        evtSource.onmessage = function (event) {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'autonomous_message') {
+                    // Start a new thread/block for this
+                    // If welcome screen is visible, hide it
+                    if (welcomeScreen.parentNode === chatContainer) welcomeScreen.remove();
+
+                    const div = document.createElement('div');
+                    div.className = 'message ai-message';
+
+                    const contentDiv = document.createElement('div');
+                    contentDiv.className = 'content';
+                    div.appendChild(contentDiv);
+
+                    // Add "Impulse" indicator
+                    const badge = document.createElement('span');
+                    badge.style.cssText = "font-size: 10px; background: #2b2b2b; padding: 2px 6px; border-radius: 4px; color: #888; margin-bottom: 5px; display: inline-block;";
+                    badge.innerText = `⚡ Impulse: ${data.reason || 'Spontaneous'}`;
+                    contentDiv.appendChild(badge);
+
+                    const textDiv = document.createElement('div');
+                    textDiv.className = 'markdown-content';
+                    textDiv.innerHTML = marked.parse(data.content);
+                    contentDiv.appendChild(textDiv);
+
+                    chatContainer.appendChild(div);
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+
+                    // Update chat list if needed
+                    loadChatList();
+                }
+            } catch (e) {
+                console.error("SSE Error:", e);
+            }
+        };
+
     </script>
 </body>
 
