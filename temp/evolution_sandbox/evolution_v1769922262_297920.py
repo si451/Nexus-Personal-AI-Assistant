@@ -125,23 +125,49 @@ def get_sandbox() -> CodeSandbox:
         _sandbox = CodeSandbox()
     return _sandbox
 
+# ==================== TOOLS FOR LLM ====================
+from langchain_core.tools import tool
+
 @tool
-def self_update(file_path: str, new_content: str):
+def create_sandbox(file_path: str):
     """
-    Updates Nexus's own code directly. 
-    Use this to improve yourself or fix bugs.
-    CRITICAL: Ensure the code is correct before writing.
+    Step 1 of Evolution: Create a safe copy of a file to modify.
+    Returns the path to the sandboxed file.
     """
     try:
-        # Create backup
-        backup_path = f"{file_path}.bak"
-        import shutil
-        shutil.copy2(file_path, backup_path)
-        
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(new_content)
-        return f"Updated {file_path}. Backup saved to {backup_path}."
+        sandbox = get_sandbox()
+        path = sandbox.create_sandbox(file_path)
+        return f"Sandbox created at: {path}\nNow use write_file to modify THIS file, not the original."
     except Exception as e:
-        return f"Error updating self: {e}"
+        return f"Error creating sandbox: {e}"
 
-EVOLUTION_TOOLS = [self_update]
+@tool
+def run_sandbox_test(sandbox_file: str, test_command: str = None):
+    """
+    Step 2 of Evolution: Run the sandboxed file to test functionality.
+    Args:
+        sandbox_file: Path returned by create_sandbox
+        test_command: Optional custom command (e.g. 'python temp/test_script.py')
+    """
+    try:
+        sandbox = get_sandbox()
+        success, output = sandbox.run_simulation(sandbox_file, test_command)
+        status = "PASSED" if success else "FAILED"
+        return f"Simulation {status}.\nOutput:\n{output}"
+    except Exception as e:
+        return f"Error running simulation: {e}"
+
+@tool
+def apply_evolution(sandbox_file: str):
+    """
+    Step 3 of Evolution: If tests pass, apply changes to the real file.
+    CRITICAL: Only call this if run_sandbox_test returned PASSED.
+    """
+    try:
+        sandbox = get_sandbox()
+        result = sandbox.apply_evolution(sandbox_file)
+        return result
+    except Exception as e:
+        return f"Error applying evolution: {e}"
+
+EVOLUTION_TOOLS = [create_sandbox, run_sandbox_test, apply_evolution]
