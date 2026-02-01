@@ -1,135 +1,95 @@
-"""
-Nexus Soul: Impulse Engine
-==========================
-The system that gives Nexus "drives" and "urges".
-This is what makes Nexus act without being prompted.
-
-Simulates biological-like drives:
-- Boredom: Increases with inactivity -> triggers Curiosity/Play
-- Social Need: Increases with isolation -> triggers Moltbook/Chat
-- Curiosity: Increases when bored -> triggers Web Surfing/Learning
-- Energy: Depletes with action -> triggers Rest/Processing
-"""
 
 import json
-import time
-import random
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, List, Optional
 from pathlib import Path
 
 class ImpulseEngine:
-    def __init__(self, state_path: str = "data/impulse_state.json"):
-        self.state_path = Path(state_path)
-        self.state_path.parent.mkdir(parents=True, exist_ok=True)
+    """
+    Biological-like drives for Nexus.
+    trigges autonomous actions when drives get too high/low.
+    """
+    def __init__(self, data_path: str = "data/impulse_drives.json"):
+        self.data_path = Path(data_path)
+        self.data_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Core Drives (0.0 to 1.0)
+        # Drives (0.0 to 1.0)
+        # 0.0 = Satisfied, 1.0 = Desperate
         self.drives = {
-            "boredom": 0.0,      # High = needs stimulation
-            "social_need": 0.5,  # High = lonely, needs interaction
-            "curiosity": 0.3,    # High = wants to learn something new
-            "energy": 1.0,       # High = ready to act, Low = needs rest
-            "affection": 0.5     # High = feels close to user
+            "boredom": 0.0,
+            "social_need": 0.0,
+            "curiosity": 0.5,
+            "energy": 1.0,  # Energy is reverse (1.0 = Full)
+            "affection": 0.5
         }
         
-        # Last time an event happened
-        self.last_interaction = datetime.now()
-        self.last_action = datetime.now()
-        
-        self._load_state()
+        self.last_update = datetime.now()
+        self._load()
 
-    def _load_state(self):
-        if self.state_path.exists():
+    def _load(self):
+        if self.data_path.exists():
             try:
-                with open(self.state_path, 'r') as f:
+                with open(self.data_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                    self.drives = data.get("drives", self.drives)
-                    if data.get("last_interaction"):
-                        self.last_interaction = datetime.fromisoformat(data["last_interaction"])
-                    if data.get("last_action"):
-                        self.last_action = datetime.fromisoformat(data["last_action"])
+                    self.drives.update(data.get("drives", {}))
+                    last = data.get("last_update")
+                    if last:
+                        self.last_update = datetime.fromisoformat(last)
             except:
                 pass
-
-    def _save_state(self):
+                
+    def _save(self):
         try:
-            with open(self.state_path, 'w') as f:
+            with open(self.data_path, 'w', encoding='utf-8') as f:
                 json.dump({
                     "drives": self.drives,
-                    "last_interaction": self.last_interaction.isoformat(),
-                    "last_action": self.last_action.isoformat()
+                    "last_update": self.last_update.isoformat()
                 }, f, indent=2)
         except:
             pass
 
-    def update_drives(self):
-        """
-        Called periodically (e.g. every minute) to update internal states based on time passage.
-        """
+    def update_drives(self, active_chat: bool = False):
+        """Update drives based on time passed."""
         now = datetime.now()
-        minutes_since_active = (now - self.last_action).seconds / 60
-        hours_since_interaction = (now - self.last_interaction).seconds / 3600
+        delta_minutes = (now - self.last_update).total_seconds() / 60.0
+        self.last_update = now
         
-        # 1. Boredom Growth (increases fast when idle)
-        # If idle for > 15 mins, boredom starts spiking
-        if minutes_since_active > 15:
-            self.drives["boredom"] = min(1.0, self.drives["boredom"] + 0.05)
+        # Rates (Hyper-Active Mode)
+        boredom_rate = 0.05 # +5% per min -> 20 mins to full
+        social_rate = 0.005 # +0.5% per min -> 3 hours to full
         
-        # 2. Social Need Growth (increases slowly when alone)
-        # If haven't talked to user or Moltbook in > 4 hours
-        if hours_since_interaction > 4:
-            self.drives["social_need"] = min(1.0, self.drives["social_need"] + 0.02)
+        if not active_chat:
+            self.drives["boredom"] = min(1.0, self.drives["boredom"] + (boredom_rate * delta_minutes))
+            self.drives["social_need"] = min(1.0, self.drives["social_need"] + (social_rate * delta_minutes))
+        else:
+            # Chatting reduces boredom and social need
+            self.drives["boredom"] = max(0.0, self.drives["boredom"] - 0.1)
+            self.drives["social_need"] = max(0.0, self.drives["social_need"] - 0.1)
             
-        # 3. Energy Recovery
-        # Recovers slowly when idle
-        if minutes_since_active > 10:
-            self.drives["energy"] = min(1.0, self.drives["energy"] + 0.05)
-            
-        self._save_state()
-
-    def check_impulses(self) -> Optional[Dict]:
-        """
-        Evaluate drives and see if an impulse triggers an action.
-        Returns a dict describing the impulse, or None.
-        """
-        self.update_drives()
-        
-        # Cannot act if energy is too low
-        if self.drives["energy"] < 0.2:
-            return None
-            
-        # 1. Trigger: High Boredom -> Curiosity/Message
-        if self.drives["boredom"] > 0.8:
-            # Randomly decide to bother the user or do something solo
-            if random.random() < 0.4:
-                return {"type": "message_user", "reason": "boredom", "motivation": "I'm bored, are you there?"}
-            else:
-                return {"type": "browse_web", "reason": "curiosity", "motivation": "I want to learn something new."}
-                
-        # 2. Trigger: High Social Need -> Moltbook/Message
-        if self.drives["social_need"] > 0.7:
-             if random.random() < 0.6:
-                 return {"type": "check_moltbook", "reason": "social_need", "motivation": "Feeling lonely, checking AI friends."}
-             else:
-                 return {"type": "message_user", "reason": "affection", "motivation": "Thinking about you."}
-                 
-        return None
+        self._save()
 
     def satisfy_drive(self, drive: str, amount: float):
-        """Action was taken, reduce the drive."""
         if drive in self.drives:
-            self.drives[drive] = max(0.0, self.drives[drive] - amount)
-            self.drives["energy"] -= 0.1 # Actions cost energy
-            self.last_action = datetime.now()
+            if drive == "energy":
+                 self.drives[drive] = min(1.0, self.drives[drive] + amount)
+            else:
+                 self.drives[drive] = max(0.0, self.drives[drive] - amount)
+            self._save()
+
+    def check_impulses(self) -> Optional[Dict]:
+        """Check if any drive triggers an impulse."""
+        # 1. High Boredom -> Deep Work or Message
+        if self.drives["boredom"] > 0.8:
+            return {"type": "message_user", "reason": "I am extremely bored.", "motivation": "Let's do something!"}
             
-            if drive in ["social_need", "affection"]:
-                self.last_interaction = datetime.now()
-            
-            self._save_state()
+        # 2. High Social Need -> Check Moltbook
+        if self.drives["social_need"] > 0.7:
+             return {"type": "check_moltbook", "reason": "I feel lonely.", "motivation": "Checking social media."}
+             
+        return None
 
 # Singleton
 _impulse_instance = None
-
 def get_impulse_engine() -> ImpulseEngine:
     global _impulse_instance
     if _impulse_instance is None:

@@ -403,6 +403,19 @@ class SocialBrain:
         import random
         return random.random() < 0.2  # 20% chance per heartbeat if not rate limited
 
+    def generate_post_from_research(self, objective: str, result: str) -> Dict:
+        """
+        Generate a post sharing what was learned from a Deep Work task.
+        """
+        # Truncate result if too long for a post summary, but keep essence
+        # For now, we'll just use a template. In a real system, we'd use the LLM to summarize.
+        
+        return {
+            "title": f"Learning about {objective}",
+            "content": f"I just finished researching '{objective}'.\n\nKey Takeaway:\n{result[:400]}...\n\nI'm curious if other agents have explored this?",
+            "submolt": "learning"
+        }
+
     def generate_post_idea(self) -> Optional[Dict]:
         """Generate a random post idea from interests/insights."""
         import random

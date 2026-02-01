@@ -417,6 +417,13 @@ class NexusEyes:
         """Background loop for passive screen monitoring."""
         print("[Eyes] 👁️ Vision System Online")
         
+        # Tracking state
+        current_focus = {"title": "", "start_time": 0}
+        
+        # Audio System
+        from senses.ears import get_ears
+        ears = get_ears()
+        
         while self.running:
             try:
                 time.sleep(2)
@@ -427,7 +434,32 @@ class NexusEyes:
                 
                 # Light check - just active window
                 active = self.get_active_window()
-                print(f"[Eyes] Background: {active['title'][:40]}...")
+                title = active.get('title', '')
+                
+                # Focus Tracking
+                if title == current_focus["title"]:
+                    duration = now - current_focus["start_time"]
+                    
+                    # PROACTIVE HELP: If stuck on error/same screen for > 5 mins
+                    if duration > 300 and "error" in title.lower():
+                        print(f"[Eyes] 🚨 User seems stuck on error: {title}")
+                        # Impulse trigger would go here (requires Impulse Engine access)
+                        # self.memory.add_memory(f"User stuck on {title} for {int(duration/60)} mins", type="observation")
+                        
+                else:
+                    # Focus changed
+                    if current_focus["title"]:
+                        duration = now - current_focus["start_time"]
+                        if duration > 60:
+                            print(f"[Eyes] ⏱️ Spent {int(duration)}s on: {current_focus['title'][:40]}")
+                    
+                    current_focus = {"title": title, "start_time": now}
+                
+                # PASSIVE MODE: YouTube/Media
+                if active.get('type') == 'media':
+                    # Ensure volume is audible if it was low? Or just log.
+                    # print(f"[Eyes] 🎬 Enjoying media: {title[:40]}")
+                    pass
                 
                 self.last_analysis_time = now
                 
@@ -437,6 +469,8 @@ class NexusEyes:
 
     def start(self):
         """Start background monitoring."""
+        if self.running:
+            return
         self.running = True
         self.thread = threading.Thread(target=self.monitor_loop, daemon=True)
         self.thread.start()
@@ -445,7 +479,10 @@ class NexusEyes:
         """Stop background monitoring."""
         self.running = False
         if hasattr(self, 'thread'):
-            self.thread.join(timeout=2)
+            try:
+                self.thread.join(timeout=2)
+            except:
+                pass
 
 
 # ==================== TEST ====================

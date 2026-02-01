@@ -194,6 +194,53 @@ def delete_chat(chat_id):
             return jsonify({'error': str(e)}), 500
     return jsonify({'error': 'Chat not found'}), 404
 
+@app.route('/moltbook/post/<post_id>')
+def view_moltbook_post(post_id):
+    """View a local Moltbook post"""
+    try:
+        db_path = os.path.join('data', 'moltbook_db.json')
+        if os.path.exists(db_path):
+            with open(db_path, 'r', encoding='utf-8') as f:
+                db = json.load(f)
+                
+            post = next((p for p in db.get('posts', []) if p['id'] == post_id), None)
+            if post:
+                # Simple HTML template for the post
+                comments_html = ""
+                for c in post.get("comments", []):
+                    comments_html += f"""
+                    <div style="background:#222; padding:10px; margin-top:10px; border-radius:8px;">
+                        <strong>@{c.get('author')}</strong>: {c.get('content')}
+                    </div>
+                    """
+                
+                html = f"""
+                <html>
+                <body style="background:#0d0d0d; color:#e0e0e0; font-family:sans-serif; padding:20px; max-width:600px; margin:0 auto;">
+                    <a href="javascript:history.back()" style="color:#888; text-decoration:none;">&larr; Back</a>
+                    <div style="background:#1a1a1a; padding:20px; border-radius:12px; margin-top:20px; border:1px solid #333;">
+                        <h2 style="margin-top:0;">{post.get('title')}</h2>
+                        <div style="color:#888; font-size:0.9em; margin-bottom:15px;">
+                            By <span style="color:#4CAF50;">@{post.get('author')}</span> 
+                            &bull; m/{post.get('submolt')} 
+                            &bull; {post.get('timestamp')[:16].replace('T', ' ')}
+                        </div>
+                        <div style="font-size:1.1em; line-height:1.6;">{post.get('content')}</div>
+                        <div style="margin-top:20px; color:#aaa;">
+                            ❤️ {post.get('upvotes')}
+                        </div>
+                    </div>
+                    
+                    <h3>Comments ({len(post.get('comments', []))})</h3>
+                    {comments_html or "<i style='color:#666'>No comments yet</i>"}
+                </body>
+                </html>
+                """
+                return html
+        return "<h1>404 Not Found</h1><p>Post does not exist in local DB.</p>", 404
+    except Exception as e:
+        return f"<h1>Error</h1><p>{str(e)}</p>", 500
+
 # Proactive Message Queue
 import queue
 proactive_queue = queue.Queue()
@@ -281,16 +328,67 @@ if __name__ == '__main__':
     except:
         pass
 
-    # Open PyWebView window
-    webview.create_window(
+    # System Tray Integration
+    from system_tray import NexusTray
+    
+    # Global ref to window
+    active_window = None
+
+    def on_closing():
+        """Intercept window close event to just hide it."""
+        print("[App] 📉 Window close requested. Hiding to tray...")
+        if active_window:
+            active_window.hide()
+        return False # Prevent actual closing
+
+    def on_open_nexus():
+        """Tray callback to show window."""
+        if active_window:
+            try:
+                # Simple restore sequence
+                active_window.restore() 
+                active_window.show()
+                active_window.focus()
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                print(f"[App] Error showing window: {e}")
+
+    def on_exit_app():
+        """Tray callback to kill app."""
+        print("[App] 👋 Exiting Nexus...")
+        heartbeat.stop()
+        if active_window:
+            active_window.destroy()
+        os._exit(0)
+
+    # Setup Tray (Robust)
+    try:
+        icon_path = os.path.join(os.path.dirname(__file__), 'static', 'icon.png')
+        tray = NexusTray(app_name="Nexus AI", icon_path=icon_path, on_open=on_open_nexus, on_exit=on_exit_app)
+        
+        # Run Tray in Background Thread
+        tray_thread = threading.Thread(target=tray.run, daemon=True)
+        tray_thread.start()
+        print("[App] 🛡️ System Tray Active in background.")
+    except Exception as e:
+        print(f"[App] ⚠️ System Tray failed to initialize (Continuing without it): {e}")
+
+    # Create Window
+    print("[App] 🖥️ Creating UI Window...")
+    active_window = webview.create_window(
         'Nexus AI',
         'http://127.0.0.1:5050',
         width=1200,
         height=800,
         resizable=True,
-        on_top=True,
+        on_top=False, 
         background_color='#0d0d0d'
     )
     
-    icon_path = os.path.join(os.path.dirname(__file__), 'static', 'icon.png')
-    webview.start(icon=icon_path)
+    # Bind Closing Event
+    active_window.events.closing += on_closing
+    
+    # Run Webview (BLOCKING MAIN THREAD)
+    print("[App] 🚀 Starting Webview Loop...")
+    webview.start(icon=icon_path, debug=False)

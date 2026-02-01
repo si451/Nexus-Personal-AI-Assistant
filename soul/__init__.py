@@ -1,12 +1,14 @@
-# Nexus Soul Module - The emergent self of Nexus
-from .identity import NexusSoul, get_soul
-from .consciousness import NexusConsciousness, get_consciousness
-from .values import NexusValues, get_values
-from .goals import NexusGoals, get_goals, GoalType, GoalStatus
+from .values import get_values
+from .goals import get_goals, GoalType
+from .identity import get_soul
+from .consciousness import get_consciousness
+from .impulse import get_impulse_engine
 
 __all__ = [
-    'NexusSoul', 'get_soul',
-    'NexusConsciousness', 'get_consciousness', 
-    'NexusValues', 'get_values',
-    'NexusGoals', 'get_goals', 'GoalType', 'GoalStatus'
+    'get_values',
+    'get_goals',
+    'GoalType',
+    'get_soul',
+    'get_consciousness',
+    'get_impulse_engine'
 ]

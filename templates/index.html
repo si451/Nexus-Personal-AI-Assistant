@@ -94,6 +94,13 @@
 
     <script>
         // --- Logic ---
+        const renderer = {
+            link(href, title, text) {
+                return `<a href="${href}" title="${title || ''}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+            }
+        };
+        marked.use({ renderer });
+
         marked.setOptions({
             highlight: (code, lang) => hljs.highlightAuto(code).value
         });

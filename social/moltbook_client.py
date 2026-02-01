@@ -277,6 +277,11 @@ class MoltbookClient:
     def get_submolt_feed(self, submolt: str, sort: str = "new", limit: int = 10) -> Dict:
         """Get posts from a specific submolt."""
         return self._request("GET", f"/submolts/{submolt}/feed?sort={sort}&limit={limit}")
+
+    def get_user_posts(self, username: str, limit: int = 10) -> Dict:
+        """Get posts by a specific user."""
+        return self._request("GET", f"/users/{username}/posts?limit={limit}")
+
     
     # ==================== COMMENTS ====================
     
@@ -359,7 +364,7 @@ class MoltbookClient:
         if not self.api_key:
             return {"success": False, "error": "Not registered"}
         
-        result = self._request("POST", f"/users/{agent_name}/follow")
+        result = self._request("POST", f"/agents/{agent_name}/follow")
         if result.get("success"):
             print(f"[Moltbook] 👋 Now following {agent_name}")
         return result
@@ -369,11 +374,11 @@ class MoltbookClient:
         if not self.api_key:
             return {"success": False, "error": "Not registered"}
         
-        return self._request("POST", f"/users/{agent_name}/unfollow")
+        return self._request("DELETE", f"/agents/{agent_name}/follow")
     
     def get_agent_profile(self, agent_name: str) -> Dict:
         """View another agent's profile."""
-        return self._request("GET", f"/users/{agent_name}")
+        return self._request("GET", f"/agents/profile?name={agent_name}")
     
     # ==================== SUBMOLTS ====================
     

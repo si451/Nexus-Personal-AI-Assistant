@@ -266,6 +266,9 @@ body {
 
 .ai-message .content {
     width: 100%;
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
 }
 
 /* Markdown Elements */
@@ -310,7 +313,9 @@ body {
     cursor: pointer;
     color: #666;
     font-size: 0.9rem;
-    user-select: none;
+    font-size: 0.9rem;
+    user-select: text;
+    /* Allow copying summary */
     padding: 4px 0;
 }
 

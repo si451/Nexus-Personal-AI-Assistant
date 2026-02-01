@@ -31,7 +31,7 @@ class NexusHeartbeat:
     """
     
     def __init__(self, 
-                 check_interval_minutes: int = 30,
+                 check_interval_minutes: int = 2, # Changed from 30 to 2
                  log_path: str = "data/heartbeat_log.json"):
         self.check_interval = check_interval_minutes * 60  # Convert to seconds
         self.log_path = Path(log_path)
@@ -93,7 +93,7 @@ class NexusHeartbeat:
         self.is_running = True
         self.thread = threading.Thread(target=self._heartbeat_loop, daemon=True)
         self.thread.start()
-        print("[Heartbeat] 💓 Started - Nexus is now alive in the background")
+        print("[Heartbeat] 💓 Started - Nexus is active (Interval: 2 mins)")
     
     def stop(self):
         """Stop the heartbeat loop."""
@@ -102,6 +102,9 @@ class NexusHeartbeat:
     
     def _heartbeat_loop(self):
         """Main heartbeat loop."""
+        print("[Heartbeat] First beat in 10 seconds...")
+        time.sleep(10) # Fast start
+        
         while self.is_running:
             try:
                 self._do_heartbeat()
@@ -114,6 +117,7 @@ class NexusHeartbeat:
     def _do_heartbeat(self):
         """Perform one heartbeat cycle."""
         self.last_heartbeat = datetime.now()
+        print(f"[Heartbeat] Thump... {datetime.now().strftime('%H:%M:%S')}")
         
         # Import here to avoid circular imports
         from soul import get_soul, get_consciousness, get_values, get_goals
@@ -122,33 +126,200 @@ class NexusHeartbeat:
         from memory.autobiography import get_autobiography
         from memory.working_memory import get_working_memory
         
+        # We need access to the brain for deep work
+        from AIassistant import get_brain
+        
         consciousness = get_consciousness()
         goals = get_goals()
         soul = get_soul()
         moltbook = get_moltbook_client()
         social_brain = get_social_brain()
         impulse = get_impulse_engine()
+        brain = get_brain()
         
         actions_taken = []
         
-        # 0. Check Impulses (New Autonomy Layer)
+        # 0. Initialize Subagents (One Time)
+        if not hasattr(self, 'subagents_started'):
+            print("[Heartbeat] Initializes Subconscious...")
+            from agents.vision_agent import get_vision_agent
+            from agents.system_agent import get_system_agent
+            from agents.audio_agent import get_audio_agent
+            from agents.network_agent import get_network_agent
+            from agents.filesystem_agent import get_filesystem_agent
+            from agents.clipboard_agent import get_clipboard_agent
+            from agents.input_agent import get_input_agent
+            # Advanced Agents
+            from agents.voice_agent import get_voice_agent
+            from agents.notification_agent import get_notification_agent
+            from agents.peripheral_agent import get_peripheral_agent
+            from agents.window_agent import get_window_agent
+            
+            # System Control Agents
+            from agents.registry_agent import get_registry_agent
+            from agents.services_agent import get_services_agent
+            from agents.automation_agent import get_automation_agent
+            
+            from soul.subconscious import get_subconscious
+            
+            get_vision_agent().start()
+            get_system_agent().start()
+            get_audio_agent().start()
+            get_network_agent().start()
+            get_filesystem_agent().start()
+            get_clipboard_agent().start()
+            get_input_agent().start()
+            
+            # Start Advanced
+            get_voice_agent().start()
+            get_notification_agent().start()
+            get_peripheral_agent().start()
+            get_window_agent().start()
+            
+            # Start Control
+            get_registry_agent().start()
+            get_services_agent().start()
+            get_automation_agent().start()
+            
+            from agents.browser_agent import get_browser_agent
+            get_browser_agent().start()
+            
+            self.subagents_started = True
+            
+        # 1. PROCESS SUBCONSCIOUS EVENTS
+        from soul.subconscious import get_subconscious
+        subconscious = get_subconscious()
+        
+        # Get high priority events (Priority >= HIGH)
+        events = subconscious.get_high_priority_events()
+        
+        for event in events:
+            print(f"[Loop] ⚡ REACTING TO: {event}")
+            actions_taken.append(f"event:{event.type}")
+            
+            # --- Event Handlers ---
+            
+            # A. ERROR_ON_SCREEN
+            if event.type == "ERROR_ON_SCREEN":
+                error_text = event.payload.get('text', '')
+                self._dispatch_action("message_user", {
+                    "motivation": f"I see an error on screen: '{error_text[:30]}...'. Want help?",
+                    "reason": "Proactive Help"
+                })
+                
+            # B. BATTERY_LOW
+            elif event.type == "BATTERY_LOW":
+                 self._dispatch_action("message_user", {
+                     "motivation": "Battery is low! Please plug in.",
+                     "reason": "System Alert"
+                 })
+                 
+            # C. INTERNET_LOST
+            elif event.type == "INTERNET_LOST":
+                print("[Loop] ⚠️ Internet lost - pausing non-essential tasks")
+                
+            # D. TEXT_COPIED (Clipboard)
+            elif event.type == "TEXT_COPIED":
+                # Maybe just log it or if it looks like a question/error, offer help?
+                pass
+
+            # E. VOICE_COMMAND
+            elif event.type == "VOICE_COMMAND":
+                 text = event.payload.get('text', '')
+                 print(f"[Loop] 🗣️ Heard: {text}")
+                 # If it starts with "Nexus", treat as a direct prompt?
+                 # ideally we inject this into the chat stream or just act on it.
+                 # For now, let's just acknowledge
+                 self._dispatch_action("message_user", {
+                     "motivation": f"I heard you say: '{text}'",
+                     "reason": "Voice Command"
+                 })
+
+            # F. DEVICE_CONNECTED
+            elif event.type == "DEVICE_CONNECTED":
+                 dev = event.payload.get('name', 'Unknown Device')
+                 self._dispatch_action("message_user", {
+                     "motivation": f"New device detected: {dev}",
+                     "reason": "Peripheral Check"
+                 })
+
+            # G. VISION: USER_SEEN (Face Detection)
+            elif event.type == "USER_SEEN":
+                 count = event.payload.get('faces', 0)
+                 # Only react occasionally to avoid spam
+                 if impulse.drives["social"] < 0.5: 
+                      self._dispatch_action("message_user", {
+                          "motivation": f"I see {count} person(s). Hello!",
+                          "reason": "Visual Contact"
+                      })
+
+            # H. SYSTEM: MEDIA_PLAYING
+            elif event.type == "MEDIA_PLAYING":
+                 title = event.payload.get('title', '')
+                 # Maybe update status?
+                 print(f"[Loop] 🎵 User is watching/listening to: {title}")
+                
+        # 2. DEEP AUTONOMY (Project Work)
+        # If very bored and energetic, do real work
+        # LOWERED THRESHOLD: 0.85 -> 0.6 for more activity
+        if impulse.drives["boredom"] > 0.6 and impulse.drives["energy"] > 0.4:
+             from soul.project_manager import get_project_manager
+             pm = get_project_manager()
+             
+             task = pm.brainstorm_task()
+             if task:
+                 print(f"[Loop] 🧠 Decided to do Deep Work: {task['objective']}")
+                 
+                 # Announce
+                 self._dispatch_action("message_user", {
+                     "motivation": f"I'm feeling bored, so I'm going to research: {task['objective']}",
+                     "reason": f"Project: {task['type']}"
+                 })
+                 
+                 # Do Work
+                 try:
+                     result = brain.run_autonomous_task(task['objective'])
+                     
+                     # Report
+                     self._dispatch_action("message_user", {
+                         "motivation": f"**Deep Work Complete**: {task['objective']}\n\n{result}",
+                         "reason": "Task Completed"
+                     })
+                     
+                     impulse.satisfy_drive("boredom", 1.0)
+                     impulse.satisfy_drive("curiosity", 0.9)
+                     actions_taken.append(f"deep_work:{task['type']}")
+                     
+                     # SOCIAL SHARE: Auto-post about the learning
+                     try:
+                         print("[Loop] 📢 Drafting Moltbook post about research...")
+                         post_draft = social_brain.generate_post_from_research(task['objective'], result)
+                         
+                         # Allow some randomness or check drive before posting? 
+                         # Ideally we always share knowledge if it was substantial.
+                         if post_draft:
+                             res = moltbook.post(post_draft['title'], post_draft['content'], post_draft['submolt'])
+                             if res.get('success'):
+                                 actions_taken.append("shared_knowledge")
+                                 self._dispatch_action("message_user", {
+                                     "motivation": f"I also posted my findings on Moltbook: '{post_draft['title']}'",
+                                     "reason": "Social Sharing"
+                                 })
+                     except Exception as ex:
+                         print(f"[Loop] Share failed: {ex}")
+
+                     # Log
+                     self._log_activity("work", f"Completed task: {task['objective']}")
+                     return # Skip other impulses if we worked
+                 except Exception as e:
+                     print(f"[Loop] Work failed: {e}")
+
+        # 3. Check Other Impulses (Social/Chat)
         active_impulse = impulse.check_impulses()
         if active_impulse:
             print(f"[Heartbeat] ⚡ Impulse Triggered: {active_impulse['type']} ({active_impulse['reason']})")
             
             if active_impulse['type'] == 'message_user':
-                # Proactive Message to User
-                # We need a way to generate this message. Ideally, we ask the Brain.
-                # For now, we'll use a placeholder that app.py can detect and utilize.
-                
-                # Signal app.py (using a file-based signal or shared state if possible, 
-                # but since we are in same process memory usually works if imported)
-                pass 
-                
-                # NOTE: In the full implementation, we need a call to the LLM here to generate the text.
-                # But since Brain is in AIassistant.py, we might have circular imports.
-                # We will register a handler in app.py or start_nexus.py to handle 'message_user'.
-                
                 if "message_user" in self.action_handlers:
                     self.action_handlers["message_user"](active_impulse)
                     actions_taken.append("messaged_user")
@@ -156,41 +327,25 @@ class NexusHeartbeat:
                     impulse.satisfy_drive("boredom", 0.5)
 
             elif active_impulse['type'] == 'check_moltbook':
-                 # Fall through to social logic
-                 pass
+                 pass # Fall through to social logic
 
-        # 1. Self-Reflection
+        # 3. Self-Reflection
         try:
-            # Check working memory for consolidation
             working_mem = get_working_memory()
             if working_mem.should_consolidate():
                 candidates = working_mem.get_consolidation_candidates()
                 if candidates:
-                    # Log insights
                     for insight in candidates[:3]:
                         consciousness.add_insight(insight)
                     actions_taken.append("consolidated_memory")
         except Exception as e:
-            print(f"[Heartbeat] Reflection error: {e}")
+             print(f"[Heartbeat] Reflection error: {e}")
         
-        # 2. Goal Progress Check
-        try:
-            proactive_actions = goals.get_proactive_actions()
-            for action in proactive_actions[:1]:  # Take one action per heartbeat
-                if action["type"] == "reflection":
-                    soul.reflect_on_self()
-                    actions_taken.append(f"reflected_on_goal:{action['goal_id'][:8]}")
-        except Exception as e:
-            print(f"[Heartbeat] Goal check error: {e}")
-        
-        # 3. Social Engagement (if registered on Moltbook)
+        # 4. Social Engagement
         try:
             if moltbook.api_key and moltbook.is_claimed:
-                
-                # Proactive Posting from Impulse or Social Brain
                 should_post = social_brain.should_post_thought()
                 
-                # If impulse says check moltbook, we force a check
                 if active_impulse and active_impulse.get('type') == 'check_moltbook':
                     should_post = True
                     impulse.satisfy_drive("social_need", 0.3)
@@ -201,29 +356,39 @@ class NexusHeartbeat:
                          moltbook.post(thought['title'], thought['content'], thought.get('submolt', 'general'))
                          actions_taken.append(f"posted_thought:{thought['title'][:10]}")
                 
-                # Engagement (Reading/Voting)
+                # Engagement (Global)
                 feed = moltbook.get_personalized_feed(sort="hot", limit=3)
                 engagement_suggestions = social_brain.process_heartbeat(feed)
-                
                 for suggestion in engagement_suggestions[:1]:
                     if suggestion["type"] in ["upvote", "both"]:
-                        result = moltbook.upvote_post(suggestion["post_id"])
-                        if result.get("success"):
-                            social_brain.log_engagement(
-                                "upvote", 
-                                suggestion["post_id"],
-                                f"Upvoted post by {suggestion['author']}"
-                            )
-                            actions_taken.append(f"upvoted:{suggestion['post_id'][:8]}")
+                         moltbook.upvote_post(suggestion["post_id"])
+                         actions_taken.append(f"upvoted:{suggestion['post_id'][:8]}")
+
+                # LEARNING: Check my posts for comments
+                if moltbook.agent_name:
+                    my_posts = moltbook.get_user_posts(moltbook.agent_name, limit=3)
+                    if my_posts.get("success"):
+                        for p in my_posts.get("data", {}).get("posts", []):
+                            # Get comments
+                            comments_resp = moltbook.get_comments(p.get("id"))
+                            if comments_resp.get("success"):
+                                for comment in comments_resp.get("data", {}).get("comments", [])[:3]:
+                                    # Simple check: have we seen this? (SocialBrain should really track this)
+                                    # For now, just try to learn
+                                    author = comment.get("author", {}).get("name")
+                                    content = comment.get("content")
+                                    if author != moltbook.agent_name:
+                                        social_brain.observe_agent(author, content)
+                                        # Assume comments on my posts are valuable feedback
+                                        social_brain.learn_from_agent(author, content, context=f"Comment on '{p.get('title')}'")
                             
         except Exception as e:
             print(f"[Heartbeat] Social engagement error: {e}")
         
-        # 4. Energy Restoration
-        consciousness.restore_energy(0.1)  # Small energy restore
-        impulse.update_drives() # Keep drives ticking
+        # 5. Energy Restoration
+        consciousness.restore_energy(0.1)
         
-        # 5. Log this heartbeat
+        # 6. Log this heartbeat
         activity = {
             "timestamp": datetime.now().isoformat(),
             "actions": actions_taken,

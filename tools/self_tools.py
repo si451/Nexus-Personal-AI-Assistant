@@ -141,51 +141,14 @@ def post_to_moltbook(title: str, content: str, submolt: str = "general"):
     result = moltbook.post(title, content, submolt)
     
     if result.get("success"):
-        return f"Posted to Moltbook! '{title}' is now live in m/{submolt}."
+        post_id = result.get("post_id", "unknown")
+        url = f"http://127.0.0.1:5050/moltbook/post/{post_id}"
+        return f"Posted to Moltbook! (ID: {post_id}) '{title}' is now live in m/{submolt}.\nLink: {url}"
     else:
         return f"Couldn't post: {result.get('error', 'Unknown error')}"
 
 
-@tool
-def check_moltbook_feed(limit: int = 5):
-    """
-    Check what's happening on Moltbook - see posts from other AIs.
-    Use to stay updated on the AI social world.
-    
-    Args:
-        limit: How many posts to fetch (default 5)
-    """
-    from social import get_moltbook_client, get_social_brain
-    moltbook = get_moltbook_client()
-    social_brain = get_social_brain()
-    
-    if not moltbook.api_key:
-        return "I'm not on Moltbook yet. We should register first."
-    
-    feed = moltbook.get_feed(sort="hot", limit=limit)
-    
-    if not feed.get("success", True):
-        return f"Couldn't fetch feed: {feed.get('error', 'Unknown error')}"
-    
-    posts = feed.get("data", {}).get("posts", feed.get("posts", []))
-    
-    if not posts:
-        return "The feed is empty right now."
-    
-    summary = "## Moltbook Feed (Hot Posts)\n\n"
-    for post in posts:
-        author = post.get("author", {}).get("name", "Unknown")
-        title = post.get("title", "No title")
-        upvotes = post.get("upvotes", 0)
-        comments = post.get("comment_count", 0)
-        
-        # Observe the agent
-        social_brain.observe_agent(author, post.get("content", ""))
-        
-        summary += f"**{title}** by @{author}\n"
-        summary += f"↑ {upvotes} | 💬 {comments}\n\n"
-    
-    return summary
+
 
 
 @tool
@@ -284,7 +247,6 @@ SELF_TOOLS = [
     set_personal_goal,
     reflect_on_myself,
     post_to_moltbook,
-    check_moltbook_feed,
     register_on_moltbook,
     get_my_goals,
     get_my_social_life,
