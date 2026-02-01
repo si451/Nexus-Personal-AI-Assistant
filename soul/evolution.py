@@ -12,6 +12,7 @@ import time
 import hashlib
 from pathlib import Path
 from typing import Tuple, Optional
+from langchain_core.tools import tool
 
 class CodeSandbox:
     def __init__(self):

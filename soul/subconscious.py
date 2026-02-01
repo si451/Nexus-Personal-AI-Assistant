@@ -129,6 +129,10 @@ class NexusSubconscious:
     def get_recent_history(self, limit=10) -> List[NexusEvent]:
         with self.history_lock:
             return self.event_history[-limit:]
+            
+    def get_recent_events(self, limit=10) -> List[NexusEvent]:
+        """Alias for get_recent_history, used by Brain."""
+        return self.get_recent_history(limit)
 
 # Singleton
 _subconscious = None
