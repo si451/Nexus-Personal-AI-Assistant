@@ -60,9 +60,8 @@ def manage_moltbook(action: str, target: str = None, content: str = None):
                  return "For reply, provide 'target' (post_id) and 'content' (your text)."
             res = client.comment(target, content)
             if res.get("success"): 
-                # REAL link now available!
-                url = f"http://127.0.0.1:5050/moltbook/post/{target}"
-                return f"Replied to {target}!\nLink: {url}"
+                url = f"https://www.moltbook.com/post/{target}"
+                return f"Replied to {target}!\nView at: {url}"
             return f"Reply failed: {res.get('error')}"
             
         elif action == "notifications":
@@ -127,22 +126,38 @@ def _format_feed(response, title):
     if not isinstance(response, dict):
         return f"Error: Invalid response type ({type(response)}) from Moltbook client."
         
-    if not response.get("success", False):
-        return f"Error: {response.get('error')}"
+    # Check for error
+    if response.get("success") == False:
+        return f"Error: {response.get('error', 'Unknown error')}"
+    
+    # Handle different response formats - API may return posts at different levels
+    posts = response.get("posts", [])
+    if not posts:
+        posts = response.get("data", {}).get("posts", [])
+    if not posts:
+        # Try recentPosts for profile responses
+        posts = response.get("recentPosts", [])
         
-    posts = response.get("data", {}).get("posts", [])
-    if not posts: return f"{title}: No posts found."
+    if not posts: 
+        return f"{title}: No posts found."
     
     out = [f"## {title}"]
     for p in posts:
-        out.append(f"\n**{p.get('title')}** (ID: {p.get('id')})")
-        # Author is a string in local simulation, might be object in real API?
-        # Handle both just in case.
+        post_id = p.get('id', '')
+        post_url = f"https://www.moltbook.com/post/{post_id}" if post_id else "N/A"
+        
+        out.append(f"\n**{p.get('title', 'Untitled')}** (ID: {post_id})")
+        
+        # Handle author - can be string or object
         author = p.get('author')
         if isinstance(author, dict):
              author_name = author.get('name', 'Unknown')
         else:
-             author_name = str(author)
+             author_name = str(author) if author else "Unknown"
              
-        out.append(f"By @{author_name} | ❤️ {p.get('upvotes')} | 💬 {len(p.get('comments', []))}")
+        karma = p.get('karma', p.get('upvotes', 0))
+        comment_count = p.get('comment_count', len(p.get('comments', [])))
+        
+        out.append(f"By @{author_name} | ❤️ {karma} | 💬 {comment_count}")
+        out.append(f"👉 {post_url}")
     return "\n".join(out)

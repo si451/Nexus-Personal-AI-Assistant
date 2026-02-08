@@ -90,58 +90,144 @@ class NexusMemory:
                filter_type: Optional[str] = None,
                only_creator_memories: bool = False) -> List[Dict]:
         """
-        Retrieves top-k relevant memories using semantic search.
+        Retrieves top-k relevant memories using a Weighted Scoring System:
+        Score = Semantic Similarity * Importance Boost * Time Decay
         """
-        # Vectorize query
+        # 1. Vectorize query
         vector = embedding_model.embed(query)
         if hasattr(vector, "tolist"):
             vector = vector.tolist()
             
-        # Build Metadata Filter
+        # 2. Build Filter
         where = {}
-        if filter_type:
-            where["type"] = filter_type
-        if only_creator_memories:
-            where["involves_creator"] = True
+        if filter_type: where["type"] = filter_type
+        if only_creator_memories: where["involves_creator"] = True
             
-        # Query
+        # 3. Fetch Candidates (Fetch 3x needed to allow for re-ranking)
+        # We fetch more because vector search only gives semantic match, 
+        # but we want to promote recent/important ones that might be slightly less semantically close
+        n_candidates = k * 4
         results = self.collection.query(
             query_embeddings=[vector],
-            n_results=k,
+            n_results=n_candidates,
             where=where if where else None
         )
         
-        # Format Results
-        memories = []
+        candidates = []
+        current_time = time.time()
+        
         if results['ids'] and results['ids'][0]:
             for i, id in enumerate(results['ids'][0]):
                 meta = results['metadatas'][0][i]
-                content = results['documents'][0][i]
                 dist = results['distances'][0][i]
+                base_similarity = 1.0 - (dist / 2) # Cosine distance usually 0-2, normalize roughly
+                base_similarity = max(0.1, base_similarity)
+
+                # --- HUMAN-LIKE MEMORY SCORING ---
                 
-                memories.append({
-                    "content": content,
-                    "type": meta.get("type", "episodic"),
-                    "importance": meta.get("importance", 0.5),
-                    "emotion": meta.get("emotion", "neutral"),
-                    "significance": meta.get("significance", 0.5),
-                    "involves_creator": meta.get("involves_creator", False),
-                    "score": 1.0 - dist # Convert distance to similarity score approx
+                # A. Importance (0.0 - 1.0)
+                importance = meta.get("importance", 0.5)
+                
+                # B. Recency (Time Decay)
+                # Memories fade over time unless valuable
+                mem_time = meta.get("timestamp", current_time)
+                age_hours = (current_time - mem_time) / 3600
+                
+                # Decay curve: Fast drop-off, long tail
+                # 1 hr = 1.0, 24 hr = 0.8, 1 week = 0.5
+                recency_score = 1.0 / (1.0 + (age_hours / 72.0)) 
+                
+                # C. Significance Override
+                # If highly significant (0.9+), ignore decay almost entirely
+                significance = meta.get("significance", 0.0)
+                if significance > 0.8:
+                    recency_score = max(recency_score, 0.9)
+                
+                # D. Creator Bias
+                # Always remember moments with Siddi better
+                creator_boost = 1.2 if meta.get("involves_creator") else 1.0
+                
+                # FINAL SCORE
+                final_score = base_similarity * (1 + importance) * recency_score * creator_boost
+                
+                candidates.append({
+                    "id": id,
+                    "content": results['documents'][0][i],
+                    "metadata": meta,
+                    "final_score": final_score,
+                    "similarity": base_similarity,
+                    "vector": vector # Needed for update
                 })
+
+        # 4. Sort and Select Top K
+        candidates.sort(key=lambda x: x["final_score"], reverse=True)
+        top_memories = candidates[:k]
+        
+        # 5. Format and Update Access Stats (Reinforcement)
+        formatted_memories = []
+        for mem in top_memories:
+            meta = mem["metadata"]
+            
+            # Formatted Output
+            formatted_memories.append({
+                "content": mem["content"],
+                "type": meta.get("type", "episodic"),
+                "importance": meta.get("importance"),
+                "emotion": meta.get("emotion"),
+                "dist_score": mem["similarity"],
+                "final_score": mem["final_score"]
+            })
+            
+            # Memory Consolidation (Reinforcement)
+            # Every time we recall it, it becomes stronger (reset decay slightly)
+            try:
+                meta["access_count"] = meta.get("access_count", 0) + 1
+                meta["last_accessed"] = current_time
+                # Boost importance slightly on recall (Repetition = Learning)
+                meta["importance"] = min(1.0, meta.get("importance", 0.5) + 0.01)
                 
-                # Update access count (fire and forget update)
-                try:
-                    meta["access_count"] += 1
-                    meta["last_accessed"] = time.time()
-                    self.collection.update(
-                        ids=[id],
-                        embeddings=[vector], # Re-supplying vector is needed for update usually or at least recommened to avoid re-embed
-                        metadatas=[meta]
-                    )
-                except:
-                    pass
-                    
-        return memories
+                self.collection.update(
+                    ids=[mem["id"]],
+                    embeddings=[mem["vector"]],
+                    metadatas=[meta]
+                )
+            except: pass
+            
+        return formatted_memories
+
+    def forget_trivial(self):
+        """
+        Mimics synaptic pruning. 
+        Deletes old, low-importance memories to clear noise.
+        """
+        current_time = time.time()
+        # Get all memories (chunked if massive, but fine for now)
+        all_mems = self.collection.get()
+        
+        ids_to_delete = []
+        
+        if all_mems['ids']:
+            for i, id in enumerate(all_mems['ids']):
+                meta = all_mems['metadatas'][i]
+                
+                importance = meta.get("importance", 0.5)
+                significance = meta.get("significance", 0.0)
+                mem_time = meta.get("timestamp", current_time)
+                age_days = (current_time - mem_time) / 86400
+                
+                # DELETE CRITERIA:
+                # 1. Very old (> 7 days) and very unimportant (< 0.3)
+                if age_days > 7 and importance < 0.3 and significance < 0.3:
+                    ids_to_delete.append(id)
+                # 2. Ancient (> 30 days) and mediocre importance (< 0.5)
+                elif age_days > 30 and importance < 0.5 and significance < 0.5:
+                    ids_to_delete.append(id)
+        
+        if ids_to_delete:
+            print(f"[Memory] 🧹 Pruning {len(ids_to_delete)} faded memories...")
+            self.collection.delete(ids=ids_to_delete)
+        else:
+            print("[Memory] Brain checks out healthy. No pruning needed.")
 
     def recall_emotional(self, emotion: str, k: int = 5) -> List[Dict]:
         """Recall memories with a specific emotional tone."""

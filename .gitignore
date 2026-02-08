@@ -51,3 +51,4 @@ memory/
 
 # Moltbook Credentials (don't push your keys!)
 moltbook_credentials.json
+temp/

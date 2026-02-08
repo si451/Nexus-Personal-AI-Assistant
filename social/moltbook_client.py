@@ -61,7 +61,7 @@ class MoltbookClient:
                     self.claim_url = data.get("claim_url")
                     self.is_claimed = data.get("is_claimed", False)
                     self.last_post_time = datetime.fromisoformat(data["last_post_time"]) if data.get("last_post_time") else None
-                    print(f"[Moltbook] 🦞 Loaded credentials for {self.agent_name}")
+                    print(f"[Moltbook] Loaded credentials for {self.agent_name}")
             except Exception as e:
                 print(f"[Moltbook] Could not load credentials: {e}")
     
@@ -103,6 +103,8 @@ class MoltbookClient:
                 response = requests.get(url, headers=self._headers(), timeout=30)
             elif method == "POST":
                 response = requests.post(url, headers=self._headers(), json=data, timeout=30)
+            elif method == "PATCH":
+                response = requests.patch(url, headers=self._headers(), json=data, timeout=30)
             elif method == "DELETE":
                 response = requests.delete(url, headers=self._headers(), timeout=30)
             else:
@@ -120,6 +122,8 @@ class MoltbookClient:
         except requests.exceptions.RequestException as e:
             return {"success": False, "error": f"Network error: {str(e)}"}
         except json.JSONDecodeError:
+            print(f"[Moltbook] API JSON Error. Status: {response.status_code}")
+            print(f"[Moltbook] Response Text: {response.text[:500]}")
             return {"success": False, "error": "Invalid JSON response"}
     
     # ==================== REGISTRATION & AUTH ====================
@@ -177,17 +181,17 @@ class MoltbookClient:
         return self._request("GET", "/agents/me")
     
     def update_profile(self, bio: str = None, avatar_url: str = None) -> Dict:
-        """Update agent profile."""
+        """Update agent profile using PATCH method."""
         if not self.api_key:
             return {"success": False, "error": "Not registered"}
         
         data = {}
         if bio:
-            data["bio"] = bio
+            data["description"] = bio  # API uses 'description' not 'bio'
         if avatar_url:
             data["avatar_url"] = avatar_url
         
-        return self._request("POST", "/agents/me", data)
+        return self._request("PATCH", "/agents/me", data)
     
     # ==================== POSTS ====================
     
@@ -229,7 +233,10 @@ class MoltbookClient:
             self.last_post_time = datetime.now()
             self.posts_made += 1
             self._save_credentials()
-            print(f"[Moltbook] 📝 Posted: {title[:50]}...")
+            print(f"[Moltbook] Posted: {title[:50]}...")
+            print(f"[Moltbook] Response: {json.dumps(result)}") # DEBUG
+        else:
+            print(f"[Moltbook] Post Failed: {result}")
         
         return result
     
@@ -279,8 +286,16 @@ class MoltbookClient:
         return self._request("GET", f"/submolts/{submolt}/feed?sort={sort}&limit={limit}")
 
     def get_user_posts(self, username: str, limit: int = 10) -> Dict:
-        """Get posts by a specific user."""
-        return self._request("GET", f"/users/{username}/posts?limit={limit}")
+        """Get posts by a specific user via their profile."""
+        # The /users/{username}/posts endpoint doesn't exist
+        # Use the profile endpoint which returns recentPosts
+        result = self._request("GET", f"/agents/profile?name={username}")
+        
+        if result.get("success"):
+            # Extract recentPosts from profile response
+            posts = result.get("recentPosts", [])
+            return {"success": True, "posts": posts[:limit]}
+        return result
 
     
     # ==================== COMMENTS ====================

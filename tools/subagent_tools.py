@@ -66,13 +66,8 @@ def list_active_agents():
         
     return "\n".join(status_report)
 
-@tool
-def stop_agent(agent_name: str):
-    """
-    Stops a specific subagent.
-    args:
-        agent_name: 'vision', 'voice', 'system', etc.
-    """
+def _stop_agent_impl(agent_name: str):
+    """Internal implementation of stop_agent"""
     name = agent_name.lower()
     
     # Check Standard
@@ -100,14 +95,23 @@ def stop_agent(agent_name: str):
     return f"Agent {name} not found."
 
 @tool
+def stop_agent(agent_name: str):
+    """
+    Stops a specific subagent.
+    args:
+        agent_name: 'vision', 'voice', 'system', etc.
+    """
+    return _stop_agent_impl(agent_name)
+
+@tool
 def restart_agent(agent_name: str):
     """
     Restarts a subagent.
     args:
         agent_name: 'vision', 'voice', 'system', etc.
     """
-    # Simply stop then start
-    stop_res = stop_agent(agent_name)
+    # Use internal impl to avoid "StructuredTool not callable"
+    stop_res = _stop_agent_impl(agent_name)
     
     name = agent_name.lower()
     if name in AGENT_REGISTRY:
@@ -118,7 +122,7 @@ def restart_agent(agent_name: str):
         except Exception as e:
             return f"{stop_res}\nError starting {name}: {e}"
             
-    return f"Restart only supported for standard agents currently. Use factory to spawn dynamic ones."
+    return f"{stop_res}\n(Restart only supported for standard agents. Dynamic agents must be re-spawned if stopped.)"
 
 @tool
 def create_new_agent(agent_name: str, python_code: str):

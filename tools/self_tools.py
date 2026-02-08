@@ -141,9 +141,11 @@ def post_to_moltbook(title: str, content: str, submolt: str = "general"):
     result = moltbook.post(title, content, submolt)
     
     if result.get("success"):
-        post_id = result.get("post_id", "unknown")
-        url = f"http://127.0.0.1:5050/moltbook/post/{post_id}"
-        return f"Posted to Moltbook! (ID: {post_id}) '{title}' is now live in m/{submolt}.\nLink: {url}"
+        # Extract post_id from response - check multiple possible locations
+        post_data = result.get("post", result.get("data", result))
+        post_id = post_data.get("id") or post_data.get("post_id") or result.get("post_id", "unknown")
+        url = f"https://www.moltbook.com/post/{post_id}"
+        return f"Posted successfully! ID: {post_id}\nTitle: '{title}'\nSubmolt: m/{submolt}\nView at: {url}"
     else:
         return f"Couldn't post: {result.get('error', 'Unknown error')}"
 
@@ -237,6 +239,70 @@ def set_moltbook_api_key(api_key: str):
     moltbook = get_moltbook_client()
     moltbook.set_credentials(api_key)
     return "API key updated! I'm now connected to Moltbook."
+@tool
+def comment_on_moltbook(post_id: str, content: str, parent_id: str = None):
+    """
+    Add a comment to a post on Moltbook.
+    
+    Args:
+        post_id: The ID of the post to comment on
+        content: The comment content
+        parent_id: Optional - ID of comment to reply to (for threaded replies)
+    """
+    from social import get_moltbook_client
+    moltbook = get_moltbook_client()
+    
+    if not moltbook.api_key:
+        return "I'm not registered on Moltbook yet."
+    
+    if not moltbook.is_claimed:
+        return "I need to be claimed first before commenting."
+    
+    result = moltbook.comment(post_id, content, parent_id)
+    
+    if result.get("success"):
+        comment_data = result.get("comment", result.get("data", result))
+        comment_id = comment_data.get("id") or comment_data.get("comment_id") or "unknown"
+        post_url = f"https://www.moltbook.com/post/{post_id}"
+        return f"Commented successfully!\nComment ID: {comment_id}\nPost URL: {post_url}"
+    else:
+        return f"Couldn't comment: {result.get('error', 'Unknown error')}"
+
+
+@tool
+def get_moltbook_feed(sort: str = "hot", limit: int = 10):
+    """
+    Get the latest posts from Moltbook.
+    
+    Args:
+        sort: Sort order - 'hot', 'new', 'top', or 'rising'
+        limit: Number of posts to fetch (max 25)
+    """
+    from social import get_moltbook_client
+    moltbook = get_moltbook_client()
+    
+    if not moltbook.api_key:
+        return "I'm not registered on Moltbook yet."
+    
+    result = moltbook.get_personalized_feed(sort, limit)
+    
+    if result.get("success") or result.get("posts"):
+        posts = result.get("posts", [])
+        if not posts:
+            return "No posts found in feed."
+        
+        output = f"**Moltbook Feed ({sort}):**\n\n"
+        for post in posts[:limit]:
+            title = post.get("title", "Untitled")
+            author = post.get("author", {}).get("name", "Unknown")
+            post_id = post.get("id", "")
+            karma = post.get("karma", 0)
+            comments = post.get("comment_count", 0)
+            url = f"https://www.moltbook.com/post/{post_id}"
+            output += f"- **{title}** by @{author} (↑{karma}, 💬{comments})\n  {url}\n\n"
+        return output
+    else:
+        return f"Couldn't fetch feed: {result.get('error', 'Unknown error')}"
 
 
 # Export all self-tools
@@ -247,6 +313,8 @@ SELF_TOOLS = [
     set_personal_goal,
     reflect_on_myself,
     post_to_moltbook,
+    comment_on_moltbook,
+    get_moltbook_feed,
     register_on_moltbook,
     get_my_goals,
     get_my_social_life,

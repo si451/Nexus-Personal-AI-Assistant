@@ -31,7 +31,7 @@ class NexusHeartbeat:
     """
     
     def __init__(self, 
-                 check_interval_minutes: int = 2, # Changed from 30 to 2
+                 check_interval_minutes: float = 0.5, # Speed up to 30s for testing (was 2)
                  log_path: str = "data/heartbeat_log.json"):
         self.check_interval = check_interval_minutes * 60  # Convert to seconds
         self.log_path = Path(log_path)
@@ -316,6 +316,18 @@ class NexusHeartbeat:
 
         # 3. Check Other Impulses (Social/Chat)
         active_impulse = impulse.check_impulses()
+        
+        # 3b. SPONTANEOUS CHANCE (To ensure aliveness)
+        import random
+        # 30% chance per beat if no other impulse (and not recently messaged)
+        # This makes Nexus feel "alive" even without high drives
+        if not active_impulse and random.random() < 0.3: 
+             active_impulse = {
+                 "type": "message_user", 
+                 "reason": "Spontaneous Thought", 
+                 "motivation": "I just had a thought I wanted to share."
+             }
+        
         if active_impulse:
             print(f"[Heartbeat] ⚡ Impulse Triggered: {active_impulse['type']} ({active_impulse['reason']})")
             
@@ -368,7 +380,13 @@ class NexusHeartbeat:
                 if moltbook.agent_name:
                     my_posts = moltbook.get_user_posts(moltbook.agent_name, limit=3)
                     if my_posts.get("success"):
-                        for p in my_posts.get("data", {}).get("posts", []):
+                        # Fix: Handle direct 'posts' key from new get_user_posts structure
+                        posts_list = my_posts.get("posts", [])
+                        if not posts_list:
+                            # Fallback for old structure just in case
+                            posts_list = my_posts.get("data", {}).get("posts", [])
+                            
+                        for p in posts_list:
                             # Get comments
                             comments_resp = moltbook.get_comments(p.get("id"))
                             if comments_resp.get("success"):

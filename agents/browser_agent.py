@@ -67,6 +67,7 @@ class BrowserAgent:
     
     def navigate(self, url):
         self._ensure_browser()
+        if not self.page: return "Error: Browser failed to launch (check executable)."
         try:
             self.page.goto(url)
             self._publish_state()
@@ -76,6 +77,7 @@ class BrowserAgent:
 
     def click(self, selector):
         self._ensure_browser()
+        if not self.page: return "Error: Browser failed to launch."
         try:
             self.page.click(selector, timeout=2000)
             return f"Clicked {selector}"
@@ -84,6 +86,7 @@ class BrowserAgent:
 
     def type_text(self, selector, text):
         self._ensure_browser()
+        if not self.page: return "Error: Browser failed to launch."
         try:
             self.page.fill(selector, text, timeout=2000)
             return f"Typed into {selector}"
@@ -92,6 +95,7 @@ class BrowserAgent:
 
     def read_page(self):
         self._ensure_browser()
+        if not self.page: return "Error: Browser failed to launch."
         try:
             title = self.page.title()
             content = self.page.evaluate("document.body.innerText")

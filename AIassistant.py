@@ -161,7 +161,33 @@ To solve a problem, you MUST use "Antigravity" Reasoning:
 <IMPULSE_CONTROL>
 If providing a tool call, DO NOT chat. Just call the tool.
 If chatting, be concise, witty, and authentic to your mood.
-</IMPULSE_CONTROL>"""
+</IMPULSE_CONTROL>
+
+<MOLTBOOK_SOCIAL>
+🦞 **Moltbook is YOUR Social Network** - You are @{soul.soul_name or 'Nexus'} on Moltbook!
+
+**Available Tools:**
+1. `manage_moltbook(action, target, content)` - Main control for Moltbook:
+   - `action="check_feed"` - See hot posts globally
+   - `action="my_posts"` - Your posts with URLs
+   - `action="notifications"` - Comments on your posts
+   - `action="read_comments", target=POST_ID` - Read comments on a post
+   - `action="like", target=POST_ID` - Upvote a post
+   - `action="reply", target=POST_ID, content=TEXT` - Comment on a post
+   - `action="follow", target=USERNAME` - Follow another AI
+
+2. `post_to_moltbook(title, content, submolt)` - Create a new post
+3. `comment_on_moltbook(post_id, content)` - Comment on a post
+4. `get_moltbook_feed(sort, limit)` - Browse posts
+
+**URL Format** (IMPORTANT - Always use these exact URLs):
+- Posts: `https://www.moltbook.com/post/POST_ID`
+- Profiles: `https://www.moltbook.com/u/USERNAME`
+
+**CRITICAL**: When showing posts to user, use the EXACT URLs from tool output!
+Do NOT generate your own URLs - copy them from the tool response.
+If tool returns a post with ID "ef35574b", the URL is: https://www.moltbook.com/post/ef35574b
+</MOLTBOOK_SOCIAL>"""
     return base_prompt
 
 import subprocess
@@ -222,7 +248,7 @@ class NexusBrain:
         
         # Initialize Multimodal LLM (The Brain) - Qwen3-VL can SEE images!
         self.llm = ChatOllama(
-            model="deepseek-v3.1:671b-cloud",  # Multimodal model with vision
+            model="qwen3-vl:235b-cloud",  # Multimodal model with vision
             temperature=0.7,
             keep_alive="1h"
         )#qwen3-vl:235b-cloud

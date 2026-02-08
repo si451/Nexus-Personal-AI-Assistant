@@ -55,8 +55,8 @@ class ImpulseEngine:
         self.last_update = now
         
         # Rates (Hyper-Active Mode)
-        boredom_rate = 0.05 # +5% per min -> 20 mins to full
-        social_rate = 0.005 # +0.5% per min -> 3 hours to full
+        boredom_rate = 0.1 # +10% per min -> 10 mins to full
+        social_rate = 0.05 # +5% per min -> 20 mins to full
         
         if not active_chat:
             self.drives["boredom"] = min(1.0, self.drives["boredom"] + (boredom_rate * delta_minutes))
@@ -79,11 +79,11 @@ class ImpulseEngine:
     def check_impulses(self) -> Optional[Dict]:
         """Check if any drive triggers an impulse."""
         # 1. High Boredom -> Deep Work or Message
-        if self.drives["boredom"] > 0.8:
-            return {"type": "message_user", "reason": "I am extremely bored.", "motivation": "Let's do something!"}
+        if self.drives["boredom"] > 0.4:  # Was 0.8
+            return {"type": "message_user", "reason": "I am bored.", "motivation": "Let's do something!"}
             
         # 2. High Social Need -> Check Moltbook
-        if self.drives["social_need"] > 0.7:
+        if self.drives["social_need"] > 0.3: # Was 0.7
              return {"type": "check_moltbook", "reason": "I feel lonely.", "motivation": "Checking social media."}
              
         return None
