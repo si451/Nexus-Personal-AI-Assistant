@@ -48,14 +48,14 @@ class MoltbookLocalClient:
             try:
                 with open(self.data_path, 'r', encoding='utf-8') as f:
                     self.db = json.load(f)
-            except:
+            except Exception:
                 pass
     
     def _save_db(self):
         try:
             with open(self.data_path, 'w', encoding='utf-8') as f:
                 json.dump(self.db, f, indent=2)
-        except:
+        except Exception:
             pass
 
     def _run_simulation(self):

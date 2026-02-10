@@ -2,10 +2,10 @@
 Nexus Vision System v3.0 (The All-Seeing Eye)
 ==============================================
 DESIGN PHILOSOPHY:
-- EasyOCR is the PRIMARY vision source (DeepSeek doesn't support images)
+- EasyOCR provides text extraction from screen (OCR layer)
+- Multimodal LLM (Qwen3-VL) provides image understanding when available
 - Rich context extraction from OCR text (YouTube titles, code, URLs)
 - Window detection for application awareness
-- NO dependency on LLM image analysis
 
 Features:
 - GPU-accelerated OCR (EasyOCR)

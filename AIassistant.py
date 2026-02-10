@@ -190,56 +190,10 @@ If tool returns a post with ID "ef35574b", the URL is: https://www.moltbook.com/
 </MOLTBOOK_SOCIAL>"""
     return base_prompt
 
-import subprocess
+# Import consolidated tools from tools/ package
+from tools.os_tools import shell, message_user
+from tools.file_tools import write_file, open_file
 
-@tool
-def write_file(file_path: str, content: str):
-    """Writes text content to a file at the given path. Overwrites if exists."""
-    try:
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(content)
-        return f"Successfully wrote to {file_path}"
-    except Exception as e:
-        return f"Error writing file: {e}"
-
-@tool
-def shell(command: str):
-    """
-    Executes a system command with FULL SYSTEM ACCESS. 
-    Use this to run ANY shell command, install packages, manage files, or check system status.
-    Equivalent to running in an interactive Powershell/Bash terminal with admin privileges.
-    """
-    try:
-        # Run command with shell=True, capturing output
-        # Replaces bad bytes to prevent crashes (Critical for Windows)
-        result = subprocess.run(
-            command, 
-            shell=True, 
-            capture_output=True, 
-            text=True, 
-            encoding='utf-8', 
-            errors='replace' 
-        )
-        output = result.stdout
-        if result.stderr:
-            output += f"\nSTDERR: {result.stderr}"
-        return output
-    except Exception as e:
-        return f"Execution Error: {str(e)}"
-
-@tool
-def open_file(file_path: str):
-    """Opens a file or application detached (non-blocking). Use this to show files to the user."""
-    try:
-        if os.name == 'nt':
-            os.startfile(file_path)
-        else:
-            # Linux/Mac fallback (not primary target but good practice)
-            opener = 'open' if sys.platform == 'darwin' else 'xdg-open'
-            subprocess.Popen([opener, file_path])
-        return f"Opened {file_path}"
-    except Exception as e:
-        return f"Error opening file: {e}"
 
 class NexusBrain:
     def __init__(self):
@@ -251,7 +205,7 @@ class NexusBrain:
             model="qwen3-vl:235b-cloud",  # Multimodal model with vision
             temperature=0.7,
             keep_alive="1h"
-        )#qwen3-vl:235b-cloud
+        )
 
         # Initialize Sense: Vision (The Eyes) -> Uses the SAME LLM
         if not hasattr(self, 'eyes'):
@@ -261,7 +215,7 @@ class NexusBrain:
         # Tools
         self.search_tool = DuckDuckGoSearchRun()
         
-        # Define Dynamic Tools (Accessing Class State)
+        # Define see_screen inline (needs closure over self.llm)
         @tool
         def see_screen():
             """
@@ -272,7 +226,7 @@ class NexusBrain:
             import base64
             import io
             from PIL import Image
-            from langchain_core.messages import HumanMessage
+            from langchain_core.messages import SystemMessage, HumanMessage
             
             try:
                 # Capture screen
@@ -288,8 +242,6 @@ class NexusBrain:
                 img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
                 
                 # Send to multimodal LLM
-                from langchain_core.messages import SystemMessage, HumanMessage
-                
                 sys_msg = SystemMessage(content="""You are Nexus, an advanced AI living on this computer. 
                     This is NOT a random image. It is a screenshot of YOUR display.
                     - The 'user' is Siddi, your creator.
@@ -303,42 +255,16 @@ class NexusBrain:
                 ])
                 
                 response = self.llm.invoke([sys_msg, vision_msg])
-                
-
                 return f"## 👁️ Screen Analysis\n{response.content}"
                 
             except Exception as e:
                 return f"Vision Error: {str(e)}"
 
-        @tool
-        def message_user(message: str, intent: str = "chat"):
-            """
-            Send a proactive message to Siddi (the user).
-            Use this when you feel bored, lonely, or have an idea to share.
-            
-            Args:
-                message: The text to send to Siddi.
-                intent: Why you are messaging (e.g., 'boredom', 'affection', 'idea')
-            """
-            # This tool is mostly a placeholder for the LLM to 'act' on its impulse.
-            # The actual delivery is handled by the autonomous loop intercepting this action
-            # or by the fact that this is a valid tool call.
-            return f"Message sent to Siddi: {message}"
-
-        # Import self-tools for soul/social interaction
-        # Import self-tools for soul/social interaction
+        # Import tool collections
         from tools.self_tools import SELF_TOOLS
-        
-        # Tools: Windows Integration
         from tools.windows_integration import WINDOWS_TOOLS
-        
-        # Tools: Self-Evolution
         from soul.evolution import EVOLUTION_TOOLS
-        
-        # Tools: Subagent Control
         from tools.subagent_tools import SUBAGENT_TOOLS, list_active_agents
-        
-        # Tools: Browser Automation
         from tools.browser_tools import BROWSER_TOOLS
         
         # Load Dynamic Skills
@@ -346,7 +272,7 @@ class NexusBrain:
         self.skill_loader = SkillLoader()
         self.dynamic_skills = self.skill_loader.load_skills()
         
-        # Use our production-grade tools + self-evolution tools + Dynamic Skills + Windows Tools + Subagent Tools + Browser Tools
+        # Assemble all tools
         self.tools = [self.search_tool, shell, write_file, open_file, see_screen, message_user] + SELF_TOOLS + self.dynamic_skills + WINDOWS_TOOLS + EVOLUTION_TOOLS + SUBAGENT_TOOLS + BROWSER_TOOLS
         self.llm_with_tools = self.llm.bind_tools(self.tools)
 
@@ -535,33 +461,32 @@ Recent Sensory Events (What you just saw/heard):
             last_content_chunk = ""
             repetition_count = 0
             
+            # STATEFUL THINKING PARSER
+            # Tracks whether we're inside a <think>...</think> block
+            in_thinking = False
+            tag_buffer = ""  # Accumulates partial tags like "<", "<t", "<th", etc.
+            
             try:
                 for msg, metadata in app.stream(inputs, config=config, stream_mode="messages"):
                     log_debug(f"Received msg type: {type(msg)}")
                     
                     # 1. AI Message Chunk (Token)
                     if isinstance(msg, AIMessageChunk):
-                        # Safeguard: Repetition Detection
+                        # Repetition Detection
                         if msg.content:
-                            log_debug(f"Chunk content: {msg.content}") # LOGGING
-                            
-                            # DeepSeek R1 Formatting (Basic)
-                            refined_content = msg.content.replace("</think>", "\n> **Thinking:** ").replace("</think>", "\n\n")
-                            
-                            if refined_content == last_content_chunk:
+                            if msg.content == last_content_chunk:
                                 repetition_count += 1
                                 if repetition_count > 50: 
                                     log_debug("Repetition loop detected! Breaking.")
                                     break
                             else:
                                 repetition_count = 0
-                                last_content_chunk = refined_content
+                                last_content_chunk = msg.content
                                 
-                        # Check for tool call chunks (Thinking/Tool prep)
+                        # Check for tool call chunks
                         if msg.tool_call_chunks:
                             chunk = msg.tool_call_chunks[0]
                             
-                            # Handle different chunk types safely
                             tool_name = None
                             if isinstance(chunk, dict):
                                 tool_name = chunk.get("name")
@@ -578,33 +503,74 @@ Recent Sensory Events (What you just saw/heard):
                         
                         # Content Chunk (Real text response)
                         elif msg.content:
-                            # Handle thinking blocks from various models
                             content = msg.content
                             
-                            # Qwen3 uses </think>...</think>
-                            # DeepSeek R1 also uses </think>...喑
-                            if '</think>' in content or '喑' in content:
-                                # Emit thinking event (DeepSeek R1 style)
-                                thinking_content = content.replace('喑', '').replace('喑', '')
-                                yield json.dumps({
-                                    "type": "thinking", 
-                                    "content": thinking_content 
-                                }) + "\n"
-                            
-                            # Parse Antigravity Manual Format (1. **THOUGHT**: ...)
-                            elif "**THOUGHT**:" in content or "**PLAN**:" in content:
-                                # This is reasoning, send as thinking
-                                yield json.dumps({
-                                    "type": "thinking", 
-                                    "content": content 
-                                }) + "\n"
-                            
-                            else:
-                                # NEW: clean response
-                                yield json.dumps({
-                                    "type": "response", 
-                                    "content": content 
-                                }) + "\n"
+                            # ===== STATEFUL THINK TAG PARSER =====
+                            # Process character by character to handle tags
+                            # split across multiple chunks
+                            i = 0
+                            while i < len(content):
+                                char = content[i]
+                                
+                                # If we're accumulating a potential tag
+                                if tag_buffer:
+                                    tag_buffer += char
+                                    
+                                    # Check for complete <think> tag
+                                    if tag_buffer == "<think>":
+                                        in_thinking = True
+                                        tag_buffer = ""
+                                    # Check for complete </think> tag
+                                    elif tag_buffer == "</think>":
+                                        in_thinking = False
+                                        tag_buffer = ""
+                                    # Still a valid prefix of <think> or </think>?
+                                    elif "<think>".startswith(tag_buffer) or "</think>".startswith(tag_buffer):
+                                        pass  # Keep accumulating
+                                    else:
+                                        # Not a valid tag - flush buffer as content
+                                        flush_content = tag_buffer
+                                        tag_buffer = ""
+                                        if in_thinking:
+                                            yield json.dumps({
+                                                "type": "thinking",
+                                                "content": flush_content
+                                            }) + "\n"
+                                        else:
+                                            yield json.dumps({
+                                                "type": "response",
+                                                "content": flush_content
+                                            }) + "\n"
+                                    i += 1
+                                    continue
+                                
+                                # Start of a potential tag
+                                if char == '<':
+                                    tag_buffer = "<"
+                                    i += 1
+                                    continue
+                                
+                                # Normal content - emit based on state
+                                if in_thinking:
+                                    # Batch remaining non-tag content for thinking
+                                    end = content.find('<', i + 1)
+                                    if end == -1:
+                                        end = len(content)
+                                    yield json.dumps({
+                                        "type": "thinking",
+                                        "content": content[i:end]
+                                    }) + "\n"
+                                    i = end
+                                else:
+                                    # Batch remaining non-tag content for response
+                                    end = content.find('<', i + 1)
+                                    if end == -1:
+                                        end = len(content)
+                                    yield json.dumps({
+                                        "type": "response",
+                                        "content": content[i:end]
+                                    }) + "\n"
+                                    i = end
 
                     # 2. Tool Output Message (When tool finishes)
                     elif isinstance(msg, ToolMessage):
@@ -612,6 +578,15 @@ Recent Sensory Events (What you just saw/heard):
                             "type": "tool_output",
                             "output": msg.content
                         }) + "\n"
+                        
+                # Flush any remaining tag buffer
+                if tag_buffer:
+                    event_type = "thinking" if in_thinking else "response"
+                    yield json.dumps({
+                        "type": event_type,
+                        "content": tag_buffer
+                    }) + "\n"
+                    
             except Exception as e:
                 log_debug(f"Stream Error: {e}")
                 yield json.dumps({"type": "error", "content": str(e)}) + "\n"

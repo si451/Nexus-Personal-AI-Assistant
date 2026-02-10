@@ -35,7 +35,7 @@ class ImpulseEngine:
                     last = data.get("last_update")
                     if last:
                         self.last_update = datetime.fromisoformat(last)
-            except:
+            except Exception:
                 pass
                 
     def _save(self):
@@ -45,7 +45,7 @@ class ImpulseEngine:
                     "drives": self.drives,
                     "last_update": self.last_update.isoformat()
                 }, f, indent=2)
-        except:
+        except Exception:
             pass
 
     def update_drives(self, active_chat: bool = False):

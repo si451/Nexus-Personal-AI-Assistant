@@ -1,9 +1,19 @@
+"""
+Nexus OS Tools
+==============
+System-level tools for interacting with the operating system.
+All functions use @tool decorator for LangChain integration.
+"""
+
 import subprocess
 import os
+import sys
 import json
 from datetime import datetime
+from langchain_core.tools import tool
 
 
+@tool
 def open_application(app_name: str):
     """
     Opens a desktop application on Windows.
@@ -13,11 +23,9 @@ def open_application(app_name: str):
     """
     try:
         if os.name == 'nt':
-            # Windows-specific application launching
             os.startfile(app_name)
             return f"Opened {app_name}"
         else:
-            # Cross-platform fallback
             opener = 'open' if sys.platform == 'darwin' else 'xdg-open'
             subprocess.Popen([opener, app_name])
             return f"Opened {app_name}"
@@ -25,10 +33,12 @@ def open_application(app_name: str):
         return f"Error opening {app_name}: {str(e)}"
 
 
+@tool
 def shell(command: str):
     """
-    Executes a system command with FULL SYSTEM ACCESS.
-    Equivalent to running in an interactive Powershell/Bash terminal.
+    Executes a system command with FULL SYSTEM ACCESS. 
+    Use this to run ANY shell command, install packages, manage files, or check system status.
+    Equivalent to running in an interactive Powershell/Bash terminal with admin privileges.
     """
     try:
         result = subprocess.run(
@@ -44,32 +54,32 @@ def shell(command: str):
             output += f"\nSTDERR: {result.stderr}"
         return output
     except Exception as e:
-        return f"Shell error: {str(e)}"
+        return f"Execution Error: {str(e)}"
 
 
-def see_screen():
-    """
-    Takes a screenshot and analyzes it using the multimodal LLM vision.
-    """
-    try:
-        # This is a placeholder - actual implementation would use mss and vision model
-        return f"## 👁️ Screen Analysis\n[Mock] Current time: {datetime.now().strftime('%H:%M')}. No active windows detected."
-    except Exception as e:
-        return f"Screen error: {str(e)}"
-
-
+@tool
 def message_user(message: str, intent: str = "chat"):
     """
     Send a proactive message to Siddi (the user).
+    Use this when you feel bored, lonely, or have an idea to share.
+    
+    Args:
+        message: The text to send to Siddi.
+        intent: Why you are messaging (e.g., 'boredom', 'affection', 'idea')
     """
-    # This would normally trigger UI notification
-    print(f"[Nexus] 💌 Proactive message: {message}")
-    return f"Message sent: {message}"
+    # This tool is mostly a placeholder for the LLM to 'act' on its impulse.
+    # The actual delivery is handled by the autonomous loop intercepting this action
+    # or by the fact that this is a valid tool call.
+    return f"Message sent to Siddi: {message}"
 
 
+@tool
 def open_url(url: str):
     """
     Opens a website in the default browser.
+    
+    Args:
+        url: The URL to open (e.g., 'https://google.com')
     """
     try:
         if os.name == 'nt':
@@ -80,22 +90,3 @@ def open_url(url: str):
             return f"Opened {url}"
     except Exception as e:
         return f"URL error: {str(e)}"
-
-
-def computer_control(action: str, **kwargs):
-    """
-    Controls the mouse and keyboard.
-    
-    Args:
-        action: One of ['type', 'press', 'click', 'scroll', 'screenshot']
-        **kwargs: Action-specific parameters
-    """
-    try:
-        # Mock implementation - actual would use pyautogui
-        if action == 'type':
-            return f"Typed: {kwargs.get('text', '')}"
-        elif action == 'click':
-            return f"Clicked at ({kwargs.get('x')}, {kwargs.get('y')})"
-        return f"Executed {action} action"
-    except Exception as e:
-        return f"Control error: {str(e)}"

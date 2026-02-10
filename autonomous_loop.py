@@ -60,7 +60,7 @@ class NexusHeartbeat:
                     last = data.get("last_heartbeat")
                     if last:
                         self.last_heartbeat = datetime.fromisoformat(last)
-            except:
+            except Exception:
                 pass
     
     def _save_log(self):
@@ -71,7 +71,7 @@ class NexusHeartbeat:
                     "activities": self.activities[-100:],
                     "last_heartbeat": self.last_heartbeat.isoformat() if self.last_heartbeat else None
                 }, f, indent=2, ensure_ascii=False)
-        except:
+        except Exception:
             pass
     
     def register_action(self, action_name: str, handler: Callable):
@@ -93,7 +93,7 @@ class NexusHeartbeat:
         self.is_running = True
         self.thread = threading.Thread(target=self._heartbeat_loop, daemon=True)
         self.thread.start()
-        print("[Heartbeat] 💓 Started - Nexus is active (Interval: 2 mins)")
+        print(f"[Heartbeat] 💓 Started - Nexus is active (Interval: {self.check_interval}s)")
     
     def stop(self):
         """Stop the heartbeat loop."""
