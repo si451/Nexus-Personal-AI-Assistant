@@ -72,20 +72,26 @@ class NexusEyes:
         # LLM reference (kept for future multimodal support)
         self.llm = llm
         
-        # EasyOCR Reader (GPU-accelerated)
+        # EasyOCR Reader (GPU-accelerated) — initialized in background thread
         self.ocr_reader = None
+        self.ocr_ready = False
         if EASYOCR_AVAILABLE:
-            print("[Eyes] Initializing EasyOCR with GPU...")
-            try:
-                self.ocr_reader = easyocr.Reader(['en'], gpu=True, verbose=False)
-                print("[Eyes] ✓ EasyOCR Ready (GPU Mode)")
-            except Exception as e:
-                print(f"[Eyes] GPU failed, trying CPU: {e}")
+            def _init_ocr():
                 try:
-                    self.ocr_reader = easyocr.Reader(['en'], gpu=False, verbose=False)
-                    print("[Eyes] ✓ EasyOCR Ready (CPU Mode)")
-                except Exception as e2:
-                    print(f"[Eyes] ✗ EasyOCR failed: {e2}")
+                    print("[Eyes] Initializing EasyOCR with GPU (background)...")
+                    self.ocr_reader = easyocr.Reader(['en'], gpu=True, verbose=False)
+                    self.ocr_ready = True
+                    print("[Eyes] ✓ EasyOCR Ready (GPU Mode)")
+                except Exception as e:
+                    print(f"[Eyes] GPU failed, trying CPU: {e}")
+                    try:
+                        self.ocr_reader = easyocr.Reader(['en'], gpu=False, verbose=False)
+                        self.ocr_ready = True
+                        print("[Eyes] ✓ EasyOCR Ready (CPU Mode)")
+                    except Exception as e2:
+                        print(f"[Eyes] ✗ EasyOCR failed: {e2}")
+            ocr_thread = threading.Thread(target=_init_ocr, daemon=True)
+            ocr_thread.start()
         else:
             print("[Eyes] ⚠ EasyOCR not available")
         
@@ -93,6 +99,37 @@ class NexusEyes:
         self.last_screenshot_hash = None
         self.last_analysis_time = 0
         self.last_context = {}
+        
+        # Real-time vision context (updated continuously by monitor_loop)
+        self.screen_context = {
+            "active_window": "Unknown",
+            "active_app": "Unknown",
+            "window_type": "unknown",
+            "open_windows": [],
+            "screen_text_excerpt": "",
+            "activity_summary": "Starting up...",
+            "timestamp": datetime.now().isoformat()
+        }
+        self.context_lock = threading.Lock()
+    
+    def get_realtime_context(self) -> str:
+        """
+        Returns the latest screen context as a formatted string.
+        Called by call_model to inject into system prompt — no tool call needed.
+        """
+        with self.context_lock:
+            ctx = self.screen_context.copy()
+        
+        windows_str = ", ".join(ctx.get("open_windows", [])[:6])
+        
+        return f"""<CURRENT_SCREEN>
+Active Window: {ctx['active_window']}
+Application: {ctx['active_app']} ({ctx['window_type']})
+Activity: {ctx['activity_summary']}
+Open Windows: {windows_str}
+Screen Text: {ctx.get('screen_text_excerpt', '')[:300]}
+Last Updated: {ctx['timestamp']}
+</CURRENT_SCREEN>"""
 
     # ==================== WINDOW DETECTION ====================
     
@@ -414,55 +451,69 @@ class NexusEyes:
     # ==================== BACKGROUND MONITORING ====================
     
     def monitor_loop(self):
-        """Background loop for passive screen monitoring."""
-        print("[Eyes] 👁️ Vision System Online")
+        """Background loop for CONTINUOUS screen monitoring.
+        
+        Updates screen_context every 5 seconds with:
+        - Active window info (fast, every cycle)
+        - OCR text excerpt (slower, every 30 seconds)
+        """
+        print("[Eyes] 👁️ Real-Time Vision System Online")
         
         # Tracking state
         current_focus = {"title": "", "start_time": 0}
-        
-        # Audio System
-        from senses.ears import get_ears
-        ears = get_ears()
+        ocr_interval = 30  # OCR every 30 seconds (heavier operation)
+        last_ocr_time = 0
         
         while self.running:
             try:
-                time.sleep(2)
+                time.sleep(5)  # Check every 5 seconds
                 
                 now = time.time()
-                if now - self.last_analysis_time < self.capture_interval:
-                    continue
                 
-                # Light check - just active window
+                # 1. Always update window info (fast operation)
                 active = self.get_active_window()
+                all_windows = self.get_all_windows()
                 title = active.get('title', '')
                 
-                # Focus Tracking
-                if title == current_focus["title"]:
-                    duration = now - current_focus["start_time"]
-                    
-                    # PROACTIVE HELP: If stuck on error/same screen for > 5 mins
-                    if duration > 300 and "error" in title.lower():
-                        print(f"[Eyes] 🚨 User seems stuck on error: {title}")
-                        # Impulse trigger would go here (requires Impulse Engine access)
-                        # self.memory.add_memory(f"User stuck on {title} for {int(duration/60)} mins", type="observation")
-                        
-                else:
-                    # Focus changed
+                # Focus tracking (detect window switches)
+                if title != current_focus["title"]:
                     if current_focus["title"]:
                         duration = now - current_focus["start_time"]
                         if duration > 60:
                             print(f"[Eyes] ⏱️ Spent {int(duration)}s on: {current_focus['title'][:40]}")
-                    
                     current_focus = {"title": title, "start_time": now}
                 
-                # PASSIVE MODE: YouTube/Media
-                if active.get('type') == 'media':
-                    # Ensure volume is audible if it was low? Or just log.
-                    # print(f"[Eyes] 🎬 Enjoying media: {title[:40]}")
-                    pass
+                # 2. Periodic OCR for text context
+                screen_text = ""
+                if self.ocr_ready and (now - last_ocr_time > ocr_interval):
+                    try:
+                        img = self.capture_screen()
+                        if img:
+                            # Resize for faster OCR
+                            img.thumbnail((960, 540))
+                            screen_text = self.extract_text(img)
+                            last_ocr_time = now
+                    except Exception as e:
+                        print(f"[Eyes] OCR cycle error: {e}")
                 
-                self.last_analysis_time = now
+                # 3. Generate activity summary
+                analysis = self.analyze_text_content(screen_text, active) if screen_text else {}
+                activity = analysis.get('summary', '') if analysis else ''
+                if not activity:
+                    activity = self._generate_context_summary("", active)
                 
+                # 4. Update shared screen context (thread-safe)
+                with self.context_lock:
+                    self.screen_context = {
+                        "active_window": title[:80],
+                        "active_app": active.get('app', 'Unknown'),
+                        "window_type": active.get('type', 'unknown'),
+                        "open_windows": [w['title'][:50] for w in all_windows[:8]],
+                        "screen_text_excerpt": screen_text[:500] if screen_text else self.screen_context.get("screen_text_excerpt", ""),
+                        "activity_summary": activity,
+                        "timestamp": datetime.now().strftime("%H:%M:%S")
+                    }
+                    
             except Exception as e:
                 print(f"[Eyes] Background Error: {e}")
                 time.sleep(5)

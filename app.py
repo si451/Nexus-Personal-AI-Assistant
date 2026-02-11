@@ -382,7 +382,7 @@ if __name__ == '__main__':
         width=1200,
         height=800,
         resizable=True,
-        on_top=False, 
+        on_top=True, 
         background_color='#0d0d0d'
     )
     

@@ -269,6 +269,11 @@
 
             let currentThoughtDetails = null;
 
+            // Thinking timer state
+            let thinkingStartTime = null;
+            let thinkingTimerInterval = null;
+            let thinkingSummaryEl = null;
+
             try {
                 const res = await fetch('/message', {
                     method: 'POST',
@@ -320,6 +325,22 @@
             } finally {
                 abortController = null;
                 resetSendButton();
+
+                // Clean up thinking timer if still running
+                if (thinkingTimerInterval) {
+                    clearInterval(thinkingTimerInterval);
+                    thinkingTimerInterval = null;
+                    if (thinkingSummaryEl && thinkingStartTime) {
+                        const elapsed = Math.round((Date.now() - thinkingStartTime) / 1000);
+                        thinkingSummaryEl.textContent = `Thought for ${elapsed}s`;
+                    }
+                    const activeThinking = document.getElementById('active-thinking');
+                    if (activeThinking) {
+                        activeThinking.classList.remove('thinking-active');
+                        activeThinking.classList.add('thinking-done');
+                        activeThinking.removeAttribute('id');
+                    }
+                }
             }
 
             // --- Helper to process individual events ---
@@ -363,32 +384,90 @@
                         outDiv.className = 'thought-output';
                         outDiv.innerText = `Result: ${event.output}`;
                         currentThoughtDetails.appendChild(outDiv);
+
+                        // Collapse the process block and reset so
+                        // follow-up response text goes to a NEW visible div
+                        const details = currentThoughtDetails.closest('details');
+                        if (details) details.open = false;
+                        currentThoughtDetails = null;
                     }
+                    // Ensure next text chunk gets a fresh visible div
+                    currentTextDiv = document.createElement('div');
+                    currentTextDiv.className = 'markdown-content';
+                    aiContent.appendChild(currentTextDiv);
+                    currentMarkdownBuffer = '';
                 }
                 else if (event.type === 'thinking') {
                     // Remove typing indicator
                     if (typingIndicator.parentNode) typingIndicator.remove();
 
-                    // Show thinking in a collapsible block
+                    // Create thinking block on first thinking chunk
                     if (!currentThoughtDetails) {
+                        thinkingStartTime = Date.now();
+
                         const details = document.createElement('details');
-                        details.className = 'thought-block';
-                        details.open = false;
+                        details.className = 'thought-block thinking-active';
+                        details.open = true; // AUTO-OPEN while thinking
+                        details.id = 'active-thinking';
                         details.innerHTML = `
-                                        <summary class="thought-summary">
-                                            <svg class="thought-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-                                            Thinking...
-                                        </summary>
-                                        <div class="thought-details"></div>
-                                     `;
+                            <summary class="thought-summary thinking-summary">
+                                <span class="thinking-spinner"></span>
+                                <span class="thinking-label">Thinking...</span>
+                            </summary>
+                            <div class="thought-details thinking-content"></div>
+                        `;
                         aiContent.appendChild(details);
-                        currentThoughtDetails = details.querySelector('.thought-details');
+                        currentThoughtDetails = details.querySelector('.thinking-content');
+                        thinkingSummaryEl = details.querySelector('.thinking-label');
+
+                        // Live timer: update "Thinking for Xs" every second
+                        thinkingTimerInterval = setInterval(() => {
+                            if (thinkingSummaryEl && thinkingStartTime) {
+                                const elapsed = Math.round((Date.now() - thinkingStartTime) / 1000);
+                                thinkingSummaryEl.textContent = `Thinking for ${elapsed}s`;
+                            }
+                        }, 1000);
                     }
-                    currentThoughtDetails.innerHTML += event.content;
+                    // Append thinking content
+                    const thinkSpan = document.createElement('span');
+                    thinkSpan.textContent = event.content;
+                    currentThoughtDetails.appendChild(thinkSpan);
                 }
                 else if (event.type === 'response') {
                     // Remove typing indicator
                     if (typingIndicator.parentNode) typingIndicator.remove();
+
+                    // STOP thinking timer when first response arrives
+                    if (thinkingTimerInterval) {
+                        clearInterval(thinkingTimerInterval);
+                        thinkingTimerInterval = null;
+
+                        // Final time display
+                        if (thinkingSummaryEl && thinkingStartTime) {
+                            const elapsed = Math.round((Date.now() - thinkingStartTime) / 1000);
+                            thinkingSummaryEl.textContent = `Thought for ${elapsed}s`;
+                        }
+
+                        // Collapse thinking block and remove active state
+                        const activeThinking = document.getElementById('active-thinking');
+                        if (activeThinking) {
+                            activeThinking.open = false;
+                            activeThinking.classList.remove('thinking-active');
+                            activeThinking.classList.add('thinking-done');
+                            activeThinking.removeAttribute('id');
+                        }
+
+                        // Reset thinking references
+                        currentThoughtDetails = null;
+                        thinkingStartTime = null;
+                        thinkingSummaryEl = null;
+
+                        // Create fresh text div for the actual response
+                        currentTextDiv = document.createElement('div');
+                        currentTextDiv.className = 'markdown-content';
+                        aiContent.appendChild(currentTextDiv);
+                        currentMarkdownBuffer = '';
+                    }
 
                     currentMarkdownBuffer += event.content;
                     currentTextDiv.innerHTML = marked.parse(currentMarkdownBuffer);

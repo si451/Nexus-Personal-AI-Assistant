@@ -1,42 +1,48 @@
 """
-Browser Tools
-=============
-Exposes Playwright capabilities to the LLM.
+Browser Tools (System Chrome)
+==============================
+Opens URLs and interacts with the user's real Chrome browser
+using native OS commands and desktop control tools.
+
+No Playwright, no separate browser instance.
 """
+import subprocess
+import webbrowser
 from langchain_core.tools import tool
-from agents.browser_agent import get_browser_agent
+
 
 @tool
-def open_browser_url(url: str):
+def open_browser_url(url: str) -> str:
     """
-    Opens the real browser to a specific URL.
-    Use this to visit websites, login, or inspect pages.
+    Opens a URL in the user's default system browser (Chrome).
+    This opens the REAL Chrome that the user already has open,
+    not a separate browser instance.
+    
+    Args:
+        url: The URL to open (e.g., 'https://linkedin.com')
     """
-    agent = get_browser_agent()
-    return agent.navigate(url)
+    try:
+        # Use webbrowser module to open in default browser
+        webbrowser.open(url)
+        return f"✅ Opened {url} in system Chrome. Use `see_screen` to see the current state, then use desktop control tools (click_at, type_text, etc.) to interact with it."
+    except Exception as e:
+        return f"❌ Failed to open URL: {e}"
 
-@tool
-def click_element_on_page(selector: str):
-    """
-    Clicks an element on the current page using a CSS selector (e.g., '#submit-btn', '.nav-link').
-    """
-    agent = get_browser_agent()
-    return agent.click(selector)
 
-@tool
-def type_on_page(selector: str, text: str):
+@tool  
+def open_chrome_at(url: str) -> str:
     """
-    Types text into an input field defined by a CSS selector.
+    Opens a URL specifically in Google Chrome (not the default browser).
+    Use this when you need to ensure Chrome is used.
+    
+    Args:
+        url: The URL to open
     """
-    agent = get_browser_agent()
-    return agent.type_text(selector, text)
+    try:
+        subprocess.Popen(['start', 'chrome', url], shell=True)
+        return f"✅ Opened {url} in Chrome. Use `see_screen` to see what's on screen, then use desktop controls to interact."
+    except Exception as e:
+        return f"❌ Failed: {e}"
 
-@tool
-def read_current_page():
-    """
-    Reads the text content of the current browser page.
-    """
-    agent = get_browser_agent()
-    return agent.read_page()
 
-BROWSER_TOOLS = [open_browser_url, click_element_on_page, type_on_page, read_current_page]
+BROWSER_TOOLS = [open_browser_url, open_chrome_at]

@@ -155,8 +155,7 @@ class NexusMemory:
                     "content": results['documents'][0][i],
                     "metadata": meta,
                     "final_score": final_score,
-                    "similarity": base_similarity,
-                    "vector": vector # Needed for update
+                    "similarity": base_similarity
                 })
 
         # 4. Sort and Select Top K
@@ -186,12 +185,14 @@ class NexusMemory:
                 # Boost importance slightly on recall (Repetition = Learning)
                 meta["importance"] = min(1.0, meta.get("importance", 0.5) + 0.01)
                 
+                # Update metadata only — do NOT pass embeddings to avoid
+                # overwriting the memory's original vector
                 self.collection.update(
                     ids=[mem["id"]],
-                    embeddings=[mem["vector"]],
                     metadatas=[meta]
                 )
-            except: pass
+            except Exception as e:
+                print(f"[Memory] ⚠️ Failed to update access stats: {e}")
             
         return formatted_memories
 
@@ -238,15 +239,13 @@ class NexusMemory:
         return self._format_get_results(results)
     
     def recall_creator_moments(self, k: int = 10) -> List[Dict]:
-        """Recall memories involving the creator (Siddi)."""
-        results = self.collection.get(
-            where={"involves_creator": True},
-            limit=k
+        """Recall memories involving the creator (Siddi), ranked by relevance."""
+        # Use semantic search with creator filter for ranked results
+        return self.recall(
+            query="My time with Siddi, our shared moments and conversations",
+            k=k,
+            only_creator_memories=True
         )
-        # Note: .get() doesn't sort by semantic relevance, just returns matching
-        # Ideally we'd embed a generic query like "My time with Siddi" if we wanted sort.
-        # But this works for pure filtering.
-        return self._format_get_results(results)
     
     def _format_get_results(self, results) -> List[Dict]:
         memories = []
@@ -271,8 +270,49 @@ class NexusMemory:
             "vector_backend": "chromadb"
         }
     
-    def consolidate_similar(self):
-        pass
-
-    def forget_trivial(self):
-        pass
+    def consolidate_similar(self, similarity_threshold: float = 0.92):
+        """
+        Merges near-duplicate memories to reduce noise.
+        If two memories have cosine similarity > threshold, keeps the more important one.
+        """
+        all_mems = self.collection.get(include=["embeddings", "metadatas", "documents"])
+        
+        if not all_mems['ids'] or len(all_mems['ids']) < 2:
+            print("[Memory] Not enough memories to consolidate.")
+            return
+        
+        import numpy as np
+        ids = all_mems['ids']
+        embeddings = np.array(all_mems['embeddings'])
+        metadatas = all_mems['metadatas']
+        
+        # Find duplicates using cosine similarity
+        ids_to_delete = set()
+        
+        for i in range(len(ids)):
+            if ids[i] in ids_to_delete:
+                continue
+            for j in range(i + 1, len(ids)):
+                if ids[j] in ids_to_delete:
+                    continue
+                
+                # Cosine similarity
+                sim = np.dot(embeddings[i], embeddings[j]) / (
+                    np.linalg.norm(embeddings[i]) * np.linalg.norm(embeddings[j]) + 1e-8
+                )
+                
+                if sim > similarity_threshold:
+                    # Keep the more important one
+                    imp_i = metadatas[i].get("importance", 0.5)
+                    imp_j = metadatas[j].get("importance", 0.5)
+                    
+                    if imp_i >= imp_j:
+                        ids_to_delete.add(ids[j])
+                    else:
+                        ids_to_delete.add(ids[i])
+        
+        if ids_to_delete:
+            print(f"[Memory] 🔗 Consolidating {len(ids_to_delete)} near-duplicate memories...")
+            self.collection.delete(ids=list(ids_to_delete))
+        else:
+            print("[Memory] No duplicates found. Memory is clean.")
